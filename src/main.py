@@ -7,7 +7,7 @@ from storage.module_store import ModuleStore
 def main(page: ft.Page):
     store = ModuleStore()          # UniDocs/ next to main.py
     module_card = ModuleDetail(store=store)
-
+    page.title = "UniDocs"
     page.add(
         ft.SafeArea(
             expand=True,
