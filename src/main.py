@@ -1,10 +1,25 @@
 import flet as ft
+from ui.module_detail import ModuleDetail
+from ui.module_sidebar import ModuleSidebar
+from storage.module_store import ModuleStore
+
 
 def main(page: ft.Page):
-    page.add(ft.Text(value="Hello, world!"))
+    store = ModuleStore()          # UniDocs/ next to main.py
+    module_card = ModuleDetail(store=store)
 
-ft.run(main)
-
+    page.add(
+        ft.SafeArea(
+            expand=True,
+            content=ft.Row(
+                spacing=8,
+                controls=[
+                    ModuleSidebar(store=store, on_module_select=module_card.set_module),
+                    module_card,
+                ],
+            ),
+        ),
+    )
 
 
 if __name__ == "__main__":
