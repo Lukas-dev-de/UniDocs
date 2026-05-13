@@ -2,7 +2,7 @@ import flet as ft
 from models.module import Module
 
 @ft.control
-class ModuleIconCard(ft.IconButton):
+class ModuleTile(ft.IconButton):
     def __init__(self, module: Module, on_select=None):  # neu: on_select
         super().__init__()
         self.module = module
