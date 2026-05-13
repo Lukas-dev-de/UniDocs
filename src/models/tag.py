@@ -1,3 +1,3 @@
 class Tag:
     def __init__(self, name:str):
-        self.name = self.name
+        self.name = name
