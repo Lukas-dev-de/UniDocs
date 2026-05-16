@@ -1,5 +1,6 @@
 import flet as ft
 
+# find more icons here: https://examples.flet.dev/icons_browser/
 ICONS: list[tuple[str, str]] = [
     ("Home", ft.Icons.HOME),
     ("Search", ft.Icons.SEARCH),
@@ -31,6 +32,9 @@ ICONS: list[tuple[str, str]] = [
     ("Music", ft.Icons.MUSIC_NOTE),
     ("Code", ft.Icons.CODE),
     ("Rocket", ft.Icons.ROCKET_LAUNCH),
+    ("ELECTRIC_BOLT", ft.Icons.ELECTRIC_BOLT),
+    ("PRECISION_MANUFACTURING", ft.Icons.PRECISION_MANUFACTURING),
+    ("APPLE", ft.Icons.APPLE)
 ]
 
 

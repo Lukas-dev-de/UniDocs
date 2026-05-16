@@ -1,6 +1,7 @@
 import flet as ft
 from models.module import Module
 from storage.module_store import ModuleStore
+from ui.upload_dialog import UploadDialog
 from pathlib import Path
 import subprocess
 import sys
@@ -34,6 +35,20 @@ class ModuleDetail(ft.Container):
             run_spacing=8,
         )
 
+        self._upload_btn = ft.FloatingActionButton(
+            icon=ft.Icons.UPLOAD_FILE,
+            tooltip="Upload documents",
+            on_click=self._open_upload,
+            bgcolor=ft.Colors.BLUE_700,
+            mini=True,
+        )
+
+        # Upload dialog (registered on page in did_mount)
+        self._upload_dialog = UploadDialog(
+            store=self._store,
+            on_upload=self._on_upload_done,
+        )
+
         # Styling
         self.border_radius = 16
         self.padding = 16
@@ -45,13 +60,37 @@ class ModuleDetail(ft.Container):
             spacing=10,
             expand=True,
             controls=[
-                self.title_text,
-                self.description_text,
+                ft.Row(
+                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                    vertical_alignment=ft.CrossAxisAlignment.START,
+                    controls=[
+                        ft.Column(
+                            spacing=4,
+                            expand=True,
+                            controls=[self.title_text, self.description_text],
+                        ),
+                        self._upload_btn,
+                    ],
+                ),
                 ft.Divider(color=ft.Colors.WHITE_24),
                 self.documents_grid,
             ],
         )
 
+    # ── lifecycle ──────────────────────────────────────────────────────────
+
+    def did_mount(self):
+        self._upload_dialog.attach_to_page(self.page)
+
+    def will_unmount(self):
+        page = self.page
+        if page is None:
+            return
+        for item in [self._upload_dialog, self._upload_dialog._file_picker]:
+            if item in page.overlay:
+                page.overlay.remove(item)
+
+    # ── public ─────────────────────────────────────────────────────────────
 
     def set_module(self, module: Module):
         self.module = module
@@ -60,6 +99,31 @@ class ModuleDetail(ft.Container):
         self._refresh_documents()
         self.update()
 
+    # ── private ────────────────────────────────────────────────────────────
+
+    def _open_upload(self, e):
+        self._upload_dialog.refresh_modules()
+        if self.module:
+            self._upload_dialog.open_for_module(self.module)
+        else:
+            self._upload_dialog.open = True
+            self._upload_dialog.update()
+
+    def _on_upload_done(self, module: Module, docs):
+        """Refresh the grid if the upload was for the currently shown module."""
+        if self.module and module.title == self.module.title:
+            self._reload_current_module()
+
+    def _reload_current_module(self):
+        """Re-read the current module from disk and refresh the document grid."""
+        if self.module is None:
+            return
+        for m in self._store.load_all():
+            if m.title == self.module.title:
+                self.module = m
+                break
+        self._refresh_documents()
+        self.update()
 
     def _refresh_documents(self):
         self.documents_grid.controls.clear()
