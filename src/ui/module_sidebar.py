@@ -1,6 +1,7 @@
 import flet as ft
 from ui.components.module_tile import ModuleTile
 from ui.components.icon_selector import IconSelector
+from ui.settings_dialog import SettingsDialog
 from models.module import Module
 from storage.module_store import ModuleStore
 
@@ -17,7 +18,7 @@ class ModuleSidebar(ft.Container):
         self._store = store
         self._on_module_select = on_module_select
 
-        self.modules_list = ft.Column(scroll=ft.ScrollMode.AUTO)
+        self.modules_list = ft.Column(scroll=ft.ScrollMode.AUTO, expand=True)
 
         self.icon_selector = IconSelector()
         self.title_field = ft.TextField(
@@ -29,25 +30,40 @@ class ModuleSidebar(ft.Container):
 
         ### UI-LAYOUT ###
         self.content = ft.Column(
+            expand=True,
+            alignment="CENTER",
             controls=[
-                ft.PopupMenuButton(
-                    icon=ft.Icons.ADD_BOX,
-                    tooltip="Add Module",
-                    items=[
-                        ft.PopupMenuItem(
-                            content=ft.Row(
-                                controls=[self.icon_selector, self.title_field]
-                            ),
-                            padding=8,
+                # header row: add-module button + settings button
+                ft.Column(
+                    alignment="CENTER",
+                    controls=[
+                        # Add Module Dialog
+                        ft.PopupMenuButton(
+                            icon=ft.Icons.ADD_BOX,
+                            tooltip="Add Module",
+                            items=[
+                                ft.PopupMenuItem(
+                                    content=ft.Row(
+                                        controls=[self.icon_selector, self.title_field]
+                                    ),
+                                    padding=8,
+                                ),
+                                ft.PopupMenuItem(
+                                    content=self.description_field, padding=8
+                                ),
+                            ],
+                            align=ft.Alignment.TOP_CENTER,
                         ),
-                        ft.PopupMenuItem(
-                            content=self.description_field, padding=8
+                        # Settings Button
+                        ft.IconButton(
+                            icon=ft.Icons.SETTINGS,
+                            tooltip="Settings",
+                            on_click=self._open_settings,
                         ),
                     ],
-                    align=ft.Alignment.TOP_CENTER,
                 ),
                 self.modules_list,
-            ]
+            ],
         )
         #################
 
@@ -58,6 +74,35 @@ class ModuleSidebar(ft.Container):
         self._store._on_change = self._on_fs_change
         self._store.start_watching()
 
+    # ── lifecycle ──────────────────────────────────────────────────────────
+
+    def did_mount(self):
+        self._dialog = SettingsDialog(
+            store=self._store,
+            on_location_change=self._on_location_change,
+        )
+        self.page.overlay.append(self._dialog)
+        self.page.update()
+
+    def will_unmount(self):
+        if hasattr(self, "_dialog") and self._dialog in self.page.overlay:
+            self.page.overlay.remove(self._dialog)
+
+    # ── settings ───────────────────────────────────────────────────────────
+
+    def _open_settings(self, e):
+        self._dialog.open = True
+        self._dialog.update()
+
+    def _on_location_change(self, new_path):
+        """Called by SettingsDialog after the user confirms a new path."""
+        self._store.stop_watching()
+        self._store.root = new_path
+        self._store._on_change = self._on_fs_change
+        self._store.start_watching()
+        self._reload_and_update()
+
+    # ── store helpers ──────────────────────────────────────────────────────
 
     def _load_from_store(self):
         """Populate the sidebar from whatever is already in UniDocs/."""
@@ -66,7 +111,6 @@ class ModuleSidebar(ft.Container):
             self.modules_list.controls.append(
                 ModuleTile(module, on_select=self._on_module_select)
             )
-
 
     def add_module(self, e: ft.ControlEvent):
         title = self.title_field.value.strip()
@@ -79,7 +123,6 @@ class ModuleSidebar(ft.Container):
             icon=self.icon_selector.value or ft.Icons.FOLDER,
         )
 
-        # Persist to disk first
         self._store.save_module(_module)
 
         self.modules_list.controls.append(
@@ -91,14 +134,9 @@ class ModuleSidebar(ft.Container):
         self.description_field.value = ""
         self.update()
 
+    # ── live-sync ──────────────────────────────────────────────────────────
 
     def _on_fs_change(self):
-        """
-        Called by ModuleStore's watchdog observer when UniDocs changes on
-        disk externally.  We must update the UI on the Flet event loop
-        thread - use page.run_thread_safe if available, otherwise use
-        invoke_method.
-        """
         try:
             page = self.page
             if page is None:

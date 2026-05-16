@@ -2,10 +2,12 @@ import flet as ft
 from ui.module_detail import ModuleDetail
 from ui.module_sidebar import ModuleSidebar
 from storage.module_store import ModuleStore
+from storage.app_config import AppConfig
 
 
 def main(page: ft.Page):
-    store = ModuleStore()          # UniDocs/ next to main.py
+    cfg = AppConfig()
+    store = ModuleStore(root=cfg.unidocs_location)
     module_card = ModuleDetail(store=store)
     page.title = "UniDocs"
     page.add(
