@@ -112,13 +112,18 @@ class ModuleDetail(ft.Container):
     def _on_upload_done(self, module: Module, docs):
         """Refresh the grid if the upload was for the currently shown module."""
         if self.module and module.title == self.module.title:
-            # Re-load module from store to get the freshly copied documents
-            for m in self._store.load_all():
-                if m.title == self.module.title:
-                    self.module = m
-                    break
-            self._refresh_documents()
-            self.update()
+            self._reload_current_module()
+
+    def _reload_current_module(self):
+        """Re-read the current module from disk and refresh the document grid."""
+        if self.module is None:
+            return
+        for m in self._store.load_all():
+            if m.title == self.module.title:
+                self.module = m
+                break
+        self._refresh_documents()
+        self.update()
 
     def _refresh_documents(self):
         self.documents_grid.controls.clear()
