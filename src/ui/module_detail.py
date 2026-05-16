@@ -15,6 +15,7 @@ class ModuleDetail(ft.Container):
 
         self._store = store
         self.module: Module | None = None
+        self._list_view = False  # False = grid, True = list
 
         # UI elements
         self.title_text = ft.Text(
@@ -27,12 +28,28 @@ class ModuleDetail(ft.Container):
             size=16,
             color=ft.Colors.WHITE_70,
         )
+
+        # Grid view
         self.documents_grid = ft.GridView(
             expand=True,
             runs_count=5,
             max_extent=160,
             spacing=8,
             run_spacing=8,
+        )
+
+        # List view
+        self.documents_list = ft.ListView(
+            expand=True,
+            spacing=4,
+            visible=False,
+        )
+
+        # Toggle button
+        self._view_toggle = ft.IconButton(
+            icon=ft.Icons.VIEW_LIST,
+            tooltip="Switch to list view",
+            on_click=self._toggle_view,
         )
 
         self._upload_btn = ft.FloatingActionButton(
@@ -69,11 +86,15 @@ class ModuleDetail(ft.Container):
                             expand=True,
                             controls=[self.title_text, self.description_text],
                         ),
-                        self._upload_btn,
+                        ft.Row(
+                            spacing=4,
+                            controls=[self._view_toggle, self._upload_btn],
+                        ),
                     ],
                 ),
                 ft.Divider(color=ft.Colors.WHITE_24),
                 self.documents_grid,
+                self.documents_list,
             ],
         )
 
@@ -101,6 +122,21 @@ class ModuleDetail(ft.Container):
 
     # ── private ────────────────────────────────────────────────────────────
 
+    def _toggle_view(self, e):
+        self._list_view = not self._list_view
+        if self._list_view:
+            self._view_toggle.icon = ft.Icons.GRID_VIEW
+            self._view_toggle.tooltip = "Switch to grid view"
+            self.documents_grid.visible = False
+            self.documents_list.visible = True
+        else:
+            self._view_toggle.icon = ft.Icons.VIEW_LIST
+            self._view_toggle.tooltip = "Switch to list view"
+            self.documents_grid.visible = True
+            self.documents_list.visible = False
+        self._refresh_documents()
+        self.update()
+
     def _open_upload(self, e):
         self._upload_dialog.refresh_modules()
         if self.module:
@@ -110,12 +146,12 @@ class ModuleDetail(ft.Container):
             self._upload_dialog.update()
 
     def _on_upload_done(self, module: Module, docs):
-        """Refresh the grid if the upload was for the currently shown module."""
+        """Refresh the view if the upload was for the currently shown module."""
         if self.module and module.title == self.module.title:
             self._reload_current_module()
 
     def _reload_current_module(self):
-        """Re-read the current module from disk and refresh the document grid."""
+        """Re-read the current module from disk and refresh the document view."""
         if self.module is None:
             return
         for m in self._store.load_all():
@@ -127,10 +163,14 @@ class ModuleDetail(ft.Container):
 
     def _refresh_documents(self):
         self.documents_grid.controls.clear()
+        self.documents_list.controls.clear()
         if self.module is None:
             return
         for doc in self.module.documents:
-            self.documents_grid.controls.append(self._doc_tile(doc))
+            if self._list_view:
+                self.documents_list.controls.append(self._doc_row(doc))
+            else:
+                self.documents_grid.controls.append(self._doc_tile(doc))
 
     def _ext_icon(self, suffix: str) -> str:
         suffix = suffix.lower()
@@ -181,6 +221,37 @@ class ModuleDetail(ft.Container):
                         suffix.lstrip(".").upper(),
                         size=10,
                         color=ft.Colors.WHITE_38,
+                    ),
+                ],
+            ),
+        )
+
+    def _doc_row(self, doc):
+        suffix = Path(doc.filepath).suffix
+        return ft.Container(
+            border_radius=8,
+            bgcolor=ft.Colors.GREY_800,
+            padding=ft.Padding.symmetric(horizontal=12, vertical=8),
+            ink=True,
+            on_click=lambda e, path=doc.filepath: self._open_file(path),
+            tooltip=doc.title,
+            content=ft.Row(
+                spacing=12,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                controls=[
+                    ft.Icon(self._ext_icon(suffix), size=24, color=ft.Colors.BLUE_200),
+                    ft.Text(
+                        doc.title,
+                        size=14,
+                        expand=True,
+                        overflow=ft.TextOverflow.ELLIPSIS,
+                    ),
+                    ft.Text(
+                        suffix.lstrip(".").upper(),
+                        size=11,
+                        color=ft.Colors.WHITE_38,
+                        width=40,
+                        text_align=ft.TextAlign.RIGHT,
                     ),
                 ],
             ),
