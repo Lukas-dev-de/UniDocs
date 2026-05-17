@@ -1,14 +1,15 @@
 [project]
 name = "unidocs"
-version = "0.1.0"
-description = ""
+version = "1.0.0"
+description = "Document management and productivity application"
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [
-    { name = "Flet developer", email = "you@example.com" }
+    { name = "Lukas Buschauer", email = "lukas.buschauer@gmail.com" }
 ]
 dependencies = [
-    "flet>=0.84.0"
+    "flet>=0.84.0",
+    "watchdog>=6.0.0",
 ]
 
 [dependency-groups]
@@ -20,10 +21,10 @@ dev = [
 
 [tool.flet]
 desktop_flavor = "light"    # Change to "full" to use flet-audio and flet-video
-org = "com.mycompany"
+org = "de.buschauermedia"
 product = "unidocs"
-company = "Flet"
-copyright = "Copyright (C) 2023-2026 by Flet"
+company = "Buschauer Media"
+copyright = "Copyright (C) 2026 Buschauer Media"
 
 [tool.flet.app]
 path = "src"

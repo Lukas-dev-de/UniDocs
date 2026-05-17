@@ -8,7 +8,8 @@ class ModuleTile(ft.IconButton):
         self.module = module
         self._on_select = on_select
 
-        self.expand = True
+        self.align = ft.Alignment.CENTER
+        
         self.border_radius = 8
         self.bgcolor = ft.Colors.BLUE_900
         self.icon = module.icon

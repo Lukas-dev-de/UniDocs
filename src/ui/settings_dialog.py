@@ -61,6 +61,17 @@ class SettingsDialog(ft.AlertDialog):
                         ],
                     ),
                     self._status,
+
+                    # ── Bug Reporting ──────────────────────────────────
+                    ft.Markdown(
+                        "If you discover any bugs, errors or you have a suggestion " \
+                        "feel free to create an issue on GitHub, "
+                        "or contact me to give further ideas or suggestions.  "
+                    ),
+                    ft.Markdown(
+                        "   [Create Issue](https://github.com/Lukas-dev-de/UniDocs/issues/new) "
+                        "   [Contact](mailto:lukas.buschauer@gmail.com) "
+                    ),
                 ],
             ),
         )
