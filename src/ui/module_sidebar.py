@@ -4,7 +4,7 @@ from ui.components.icon_selector import IconSelector
 from ui.settings_dialog import SettingsDialog
 from ui.context_menu import ContextMenu
 from models.module import Module
-from storage.module_store import ModuleStore
+from app_storage.module_store import ModuleStore
 
 
 @ft.control

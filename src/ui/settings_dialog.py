@@ -1,7 +1,7 @@
 import flet as ft
 from pathlib import Path
-from storage.module_store import ModuleStore
-from storage.app_config import AppConfig
+from app_storage.module_store import ModuleStore
+from app_storage.app_config import AppConfig
 
 
 class SettingsDialog(ft.AlertDialog):

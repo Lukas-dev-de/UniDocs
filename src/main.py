@@ -1,8 +1,8 @@
 import flet as ft
 from ui.module_detail import ModuleDetail
 from ui.module_sidebar import ModuleSidebar
-from storage.module_store import ModuleStore
-from storage.app_config import AppConfig
+from app_storage.module_store import ModuleStore
+from app_storage.app_config import AppConfig
 
 
 def main(page: ft.Page):

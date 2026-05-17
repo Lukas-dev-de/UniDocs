@@ -1,6 +1,6 @@
 import flet as ft
 from models.module import Module
-from storage.module_store import ModuleStore
+from app_storage.module_store import ModuleStore
 from ui.upload_dialog import UploadDialog
 from ui.context_menu import ContextMenu
 from pathlib import Path
