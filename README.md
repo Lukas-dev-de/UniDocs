@@ -1,5 +1,10 @@
 # Unidocs app
 
+On first start go to Settings and set the location where your files should be stored.
+
+
+# For Developers
+
 ## Run the app
 
 ### uv
