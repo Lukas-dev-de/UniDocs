@@ -22,11 +22,11 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from platformdirs import user_documents_dir
 
 # Always sits next to main.py, regardless of where the script is run from
 _CONFIG_PATH = Path(__file__).parent.parent / "config.json"
-_DEFAULT_UNIDOCS = Path(__file__).parent.parent / "UniDocs"
-
+_DEFAULT_UNIDOCS = Path(user_documents_dir()) / "UniDocs"
 
 class AppConfig:
     def __init__(self, config_path: Path = _CONFIG_PATH):

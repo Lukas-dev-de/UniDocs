@@ -10,6 +10,7 @@ authors = [
 dependencies = [
     "flet>=0.84.0",
     "watchdog>=6.0.0",
+    "platformdirs>=4.9.6",
 ]
 
 [dependency-groups]
