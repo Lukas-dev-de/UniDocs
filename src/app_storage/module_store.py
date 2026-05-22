@@ -6,12 +6,12 @@ Filesystem-backed persistence for Module objects.
 Layout
 ------
 UniDocs/
-├── Physics 101/
-│   ├── .meta           ← JSON: {"description": "...", "icon": "SCIENCE"}
-│   └── lecture.pdf     ← documents (any file)
-└── Math/
-    ├── .meta
-    └── ...
+├ Physics 101/
+│   ├ .meta           ← JSON: {"description": "...", "icon": "SCIENCE"}
+│   └ lecture.pdf     ← documents (any file)
+└ Math/
+    ├ .meta
+    └ ...
 
 The icon is stored as the bare icon-name string (e.g. "SCIENCE"),
 resolved to ft.Icons.<name> on load.
@@ -30,6 +30,8 @@ from models.document import Document
 
 UNIDOCS_DIR = Path(__file__).parent.parent / "UniDocs"
 META_FILENAME = ".meta"
+DOC_TAGS_FILENAME = ".doc_tags"   # per-module: {"filename.pdf": ["Tag A", "Tag B"]}
+GLOBAL_TAGS_FILENAME = "tags.json"  # root-level: ["Tag A", "Tag B", ...]
 _DEFAULT_ICON_NAME = "FOLDER"
 
 # helperfunctions
@@ -204,6 +206,66 @@ class ModuleStore:
                 self._observer.join(timeout=2)
                 self._observer = None
 
+    # tag management
+
+    def load_all_tags(self) -> list[str]:
+        """Return the global list of tag names."""
+        path = self.root / GLOBAL_TAGS_FILENAME
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except (FileNotFoundError, json.JSONDecodeError):
+            return []
+
+    def add_global_tag(self, name: str) -> None:
+        """Add a new tag to the global registry if it doesn't already exist."""
+        tags = self.load_all_tags()
+        if name not in tags:
+            tags.append(name)
+            self._write_global_tags(tags)
+
+    def remove_global_tag(self, name: str) -> None:
+        """
+        Remove a tag from the global registry and strip it from all documents.
+        """
+        tags = [t for t in self.load_all_tags() if t != name]
+        self._write_global_tags(tags)
+        # strip from every module's doc_tags
+        for folder in self.root.iterdir():
+            if folder.is_dir():
+                doc_tags = self._read_doc_tags(folder)
+                changed = False
+                for fname in doc_tags:
+                    if name in doc_tags[fname]:
+                        doc_tags[fname] = [t for t in doc_tags[fname] if t != name]
+                        changed = True
+                if changed:
+                    self._write_doc_tags(folder, doc_tags)
+
+    def save_doc_tags(self, module, doc, tag_names: list[str]) -> None:
+        """Persist tag assignments for a single document."""
+        folder = self._folder_for(module)
+        doc_tags = self._read_doc_tags(folder)
+        filename = Path(doc.filepath).name
+        doc_tags[filename] = tag_names
+        self._write_doc_tags(folder, doc_tags)
+
+    def _read_doc_tags(self, folder: Path) -> dict:
+        path = folder / DOC_TAGS_FILENAME
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except (FileNotFoundError, json.JSONDecodeError):
+            return {}
+
+    def _write_doc_tags(self, folder: Path, data: dict) -> None:
+        (folder / DOC_TAGS_FILENAME).write_text(
+            json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+
+    def _write_global_tags(self, tags: list[str]) -> None:
+        (self.root / GLOBAL_TAGS_FILENAME).write_text(
+            json.dumps(tags, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+
     # helpers
     def _folder_for(self, module: Module) -> Path:
         return self.root / _safe_name(module.title)
@@ -223,11 +285,20 @@ class ModuleStore:
             description=meta.get("description", ""),
             icon=_name_to_icon(icon_name),
         )
+        # load per-module doc-tag map
+        doc_tags_map = self._read_doc_tags(folder)
         # load documents (every non-meta file)
         for f in sorted(folder.iterdir()):
-            if f.is_file() and f.name != META_FILENAME:
+            if f.is_file() and f.name not in (META_FILENAME, DOC_TAGS_FILENAME):
+                from models.tag import Tag
+                tag_names = doc_tags_map.get(f.name, [])
                 module.add_document(
-                    Document(title=f.stem, description="", filepath=str(f))
+                    Document(
+                        title=f.stem,
+                        description="",
+                        filepath=str(f),
+                        tags=[Tag(n) for n in tag_names],
+                    )
                 )
         return module
 

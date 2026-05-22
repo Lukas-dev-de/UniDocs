@@ -3,6 +3,7 @@ from models.module import Module
 from app_storage.module_store import ModuleStore
 from ui.upload_dialog import UploadDialog
 from ui.context_menu import ContextMenu
+from ui.components.tag_dialog import TagDialog
 from pathlib import Path
 import subprocess
 import sys
@@ -18,8 +19,9 @@ class ModuleDetail(ft.Container):
         self.module: Module | None = None
         self._list_view = False
         self._sort_asc = True
+        self._active_tag_filter: str | None = None  # currently selected tag filter
 
-        # ── Title: text display + inline editor ───────────────────────────
+        #  Title: text display + inline editor 
         self.title_text = ft.Text(
             value="No Module Selected",
             size=32,
@@ -39,7 +41,7 @@ class ModuleDetail(ft.Container):
             mouse_cursor=ft.MouseCursor.TEXT,
         )
 
-        # ── Description: text display + inline editor ─────────────────────
+        #  Description: text display + inline editor 
         self.description_text = ft.Text(
             value="Select a module to display information. You can create a new module by ",
             size=16,
@@ -60,7 +62,7 @@ class ModuleDetail(ft.Container):
             mouse_cursor=ft.MouseCursor.TEXT,
         )
 
-        # ── Toolbar buttons ───────────────────────────────────────────────
+        #  Toolbar buttons 
         self._sort_toggle = ft.IconButton(
             icon=ft.Icons.SORT_BY_ALPHA,
             tooltip="Sort Z → A",
@@ -79,13 +81,21 @@ class ModuleDetail(ft.Container):
             mini=True,
         )
 
-        # ── Upload dialog ─────────────────────────────────────────────────
+        #  Tag filter bar 
+        self._tag_filter_row = ft.Row(
+            wrap=True,
+            spacing=6,
+            run_spacing=6,
+            visible=False,
+        )
+
+        #  Upload dialog 
         self._upload_dialog = UploadDialog(
             store=self._store,
             on_upload=self._on_upload_done,
         )
 
-        # ── Document views ────────────────────────────────────────────────
+        #  Document views 
         self.documents_grid = ft.GridView(
             expand=True,
             runs_count=5,
@@ -99,13 +109,13 @@ class ModuleDetail(ft.Container):
             visible=False,
         )
 
-        # ── Styling ───────────────────────────────────────────────────────
+        #  Styling 
         self.border_radius = 16
         self.padding = 16
         self.expand = 19
         self.bgcolor = ft.Colors.GREY_900
 
-        # ── Layout ────────────────────────────────────────────────────────
+        #  Layout 
         self.content = ft.Column(
             spacing=10,
             expand=True,
@@ -131,15 +141,23 @@ class ModuleDetail(ft.Container):
                     ],
                 ),
                 ft.Divider(color=ft.Colors.WHITE_24),
+                self._tag_filter_row,
                 self.documents_grid,
                 self.documents_list,
             ],
         )
 
-    # ── lifecycle ──────────────────────────────────────────────────────────
+    #  lifecycle 
 
     def did_mount(self):
         self._upload_dialog.attach_to_page(self.page)
+
+        # Tag dialog
+        self._tag_dialog = TagDialog(
+            store=self._store,
+            on_changed=self._reload_current_module,
+        )
+        self.page.overlay.append(self._tag_dialog)
 
         # Floating context menu for documents
         self._ctx_menu = ContextMenu()
@@ -188,6 +206,7 @@ class ModuleDetail(ft.Container):
         for item in [
             self._upload_dialog,
             self._upload_dialog._file_picker,
+            self._tag_dialog,
             self._ctx_menu,
             self._rename_dialog,
             self._delete_dialog,
@@ -195,17 +214,18 @@ class ModuleDetail(ft.Container):
             if item in page.overlay:
                 page.overlay.remove(item)
 
-    # ── public ─────────────────────────────────────────────────────────────
+    #  public 
 
     def set_module(self, module: Module):
         self.module = module
+        self._active_tag_filter = None
         # exit any active inline edit
         self._show_title_text(module.title)
         self._show_desc_text(module.description)
         self._refresh_documents()
         self.update()
 
-    # ── inline title editing ───────────────────────────────────────────────
+    #  inline title editing 
 
     async def _start_title_edit(self, e):
         if self.module is None:
@@ -235,7 +255,7 @@ class ModuleDetail(ft.Container):
         self._title_click.visible = True
         self.title_field.visible = False
 
-    # ── inline description editing ─────────────────────────────────────────
+    #  inline description editing 
 
     async def _start_desc_edit(self, e):
         if self.module is None:
@@ -266,7 +286,7 @@ class ModuleDetail(ft.Container):
         self._desc_click.visible = True
         self.description_field.visible = False
 
-    # ── toolbar ────────────────────────────────────────────────────────────
+    #  toolbar 
 
     def _toggle_sort(self, e):
         self._sort_asc = not self._sort_asc
@@ -297,7 +317,7 @@ class ModuleDetail(ft.Container):
             self._upload_dialog.open = True
             self._upload_dialog.update()
 
-    # ── upload callback ────────────────────────────────────────────────────
+    #  upload callback 
 
     def _on_upload_done(self, module: Module, docs):
         if self.module and module.title == self.module.title:
@@ -313,23 +333,70 @@ class ModuleDetail(ft.Container):
         self._refresh_documents()
         self.update()
 
-    # ── document rendering ─────────────────────────────────────────────────
+    #  document rendering 
 
     def _refresh_documents(self):
         self.documents_grid.controls.clear()
         self.documents_list.controls.clear()
         if self.module is None:
+            self._tag_filter_row.visible = False
             return
-        docs = sorted(
-            self.module.documents,
-            key=lambda d: d.title.lower(),
-            reverse=not self._sort_asc,
-        )
+
+        # --- rebuild tag filter bar ---
+        all_tags = self._store.load_all_tags()
+        self._tag_filter_row.controls.clear()
+        if all_tags:
+            self._tag_filter_row.visible = True
+            # "All" chip
+            all_selected = self._active_tag_filter is None
+            self._tag_filter_row.controls.append(
+                self._filter_chip("All", None, all_selected)
+            )
+            for tag_name in sorted(all_tags):
+                selected = self._active_tag_filter == tag_name
+                self._tag_filter_row.controls.append(
+                    self._filter_chip(tag_name, tag_name, selected)
+                )
+        else:
+            self._tag_filter_row.visible = False
+
+        # --- filter and sort docs ---
+        docs = self.module.documents
+        if self._active_tag_filter:
+            docs = [
+                d for d in docs
+                if any(
+                    (t.name if hasattr(t, "name") else t) == self._active_tag_filter
+                    for t in d.tags
+                )
+            ]
+        docs = sorted(docs, key=lambda d: d.title.lower(), reverse=not self._sort_asc)
+
         for doc in docs:
             if self._list_view:
                 self.documents_list.controls.append(self._doc_row(doc))
             else:
                 self.documents_grid.controls.append(self._doc_tile(doc))
+
+    def _filter_chip(self, label: str, tag_name, selected: bool) -> ft.Container:
+        return ft.Container(
+            bgcolor=ft.Colors.BLUE_700 if selected else ft.Colors.GREY_800,
+            border_radius=16,
+            padding=ft.Padding.symmetric(horizontal=10, vertical=4),
+            on_click=lambda e, t=tag_name: self._set_tag_filter(t),
+            ink=True,
+            content=ft.Text(
+                label,
+                size=12,
+                color=ft.Colors.WHITE if selected else ft.Colors.WHITE_70,
+            ),
+        )
+
+    def _set_tag_filter(self, tag_name):
+        self._active_tag_filter = tag_name
+        self._refresh_documents()
+        self.update()
+
 
     def _ext_icon(self, suffix: str) -> str:
         suffix = suffix.lower()
@@ -356,6 +423,21 @@ class ModuleDetail(ft.Container):
 
     def _doc_tile(self, doc):
         suffix = Path(doc.filepath).suffix
+        tag_names = [t.name if hasattr(t, "name") else t for t in doc.tags]
+        tag_chips = ft.Row(
+            wrap=True,
+            spacing=4,
+            run_spacing=4,
+            controls=[
+                ft.Container(
+                    bgcolor=ft.Colors.BLUE_900,
+                    border_radius=10,
+                    padding=ft.Padding.symmetric(horizontal=6, vertical=2),
+                    content=ft.Text(n, size=9, color=ft.Colors.BLUE_200),
+                )
+                for n in tag_names
+            ],
+        )
         inner = ft.Container(
             border_radius=10,
             bgcolor=ft.Colors.GREY_800,
@@ -381,6 +463,7 @@ class ModuleDetail(ft.Container):
                         size=10,
                         color=ft.Colors.WHITE_38,
                     ),
+                    tag_chips,
                 ],
             ),
         )
@@ -391,6 +474,19 @@ class ModuleDetail(ft.Container):
 
     def _doc_row(self, doc):
         suffix = Path(doc.filepath).suffix
+        tag_names = [t.name if hasattr(t, "name") else t for t in doc.tags]
+        tag_chips = ft.Row(
+            spacing=4,
+            controls=[
+                ft.Container(
+                    bgcolor=ft.Colors.BLUE_900,
+                    border_radius=10,
+                    padding=ft.Padding.symmetric(horizontal=6, vertical=2),
+                    content=ft.Text(n, size=10, color=ft.Colors.BLUE_200),
+                )
+                for n in tag_names
+            ],
+        )
         inner = ft.Container(
             border_radius=8,
             bgcolor=ft.Colors.GREY_800,
@@ -409,6 +505,7 @@ class ModuleDetail(ft.Container):
                         expand=True,
                         overflow=ft.TextOverflow.ELLIPSIS,
                     ),
+                    tag_chips,
                     ft.Text(
                         suffix.lstrip(".").upper(),
                         size=11,
@@ -424,13 +521,15 @@ class ModuleDetail(ft.Container):
             on_secondary_tap_down=lambda e, d=doc: self._show_doc_menu(e, d),
         )
 
-    # ── document context menu ──────────────────────────────────────────────
+    #  document context menu 
 
     def _show_doc_menu(self, e: ft.TapEvent, doc):
         self._ctx_menu.show(
             e.global_position.x,
             e.global_position.y,
             [
+                ("Manage Tags", ft.Icons.LABEL_OUTLINE, ft.Colors.BLUE_200,
+                 lambda d=doc: self._doc_manage_tags(d)),
                 ("Rename", ft.Icons.DRIVE_FILE_RENAME_OUTLINE, ft.Colors.WHITE,
                  lambda d=doc: self._doc_rename(d)),
                 ("Delete", ft.Icons.DELETE_OUTLINE, ft.Colors.RED_400,
@@ -438,7 +537,10 @@ class ModuleDetail(ft.Container):
             ],
         )
 
-    # ── document dialog helpers ────────────────────────────────────────────
+    def _doc_manage_tags(self, doc):
+        self._tag_dialog.open_for_document(doc, self.module)
+
+    #  document dialog helpers 
 
     def _close_dialog(self, dlg):
         dlg.open = False
@@ -486,7 +588,7 @@ class ModuleDetail(ft.Container):
             print(f"Delete failed: {ex}")
         self._reload_current_module()
 
-    # ── file opener ────────────────────────────────────────────────────────
+    #  file opener 
 
     def _open_file(self, filepath: str):
         try:
