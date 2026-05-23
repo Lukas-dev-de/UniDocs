@@ -21,7 +21,7 @@ ICONS: list[tuple[str, str]] = [
     ("Lock", ft.Icons.LOCK),
     ("Share", ft.Icons.SHARE),
     ("Download", ft.Icons.DOWNLOAD),
-    ("Upload", ft.Icons.UPLOAD),
+    ("Import", ft.Icons.UPLOAD),
     ("Cloud", ft.Icons.CLOUD),
     ("Folder", ft.Icons.FOLDER),
     ("Chart", ft.Icons.BAR_CHART),

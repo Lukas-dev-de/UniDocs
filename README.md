@@ -18,7 +18,7 @@ On first start go to Settings and set the location where your files should be st
 
 #### medium effort 
 - add colors to modules
-- renaming files directly in import/upload menu 
+- renaming files directly in import/import menu 
 - get links in settings to work 
 - applying tags by drag n dropping them from the filter bar onto documents 
 - selecting multiple files (for example with ctl+click or middle click) to apply tags or delete multiple at once

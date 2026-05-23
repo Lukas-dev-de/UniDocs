@@ -1,7 +1,7 @@
 import flet as ft
 from models.module import Module
 from app_storage.module_store import ModuleStore
-from ui.upload_dialog import UploadDialog
+from ui.import_dialog import ImportDialog
 from ui.context_menu import ContextMenu
 from ui.components.tag_dialog import TagDialog
 from ui.components.tag_colors import TAG_PALETTE
@@ -74,10 +74,10 @@ class ModuleDetail(ft.Container):
             tooltip="Switch to list view",
             on_click=self._toggle_view,
         )
-        self._upload_btn = ft.FloatingActionButton(
+        self._import_btn = ft.FloatingActionButton(
             icon=ft.Icons.UPLOAD_FILE,
-            tooltip="Upload documents",
-            on_click=self._open_upload,
+            tooltip="Import documents",
+            on_click=self._open_import,
             bgcolor=ft.Colors.BLUE_700,
             mini=True,
         )
@@ -90,10 +90,10 @@ class ModuleDetail(ft.Container):
             visible=False,
         )
 
-        #  Upload dialog 
-        self._upload_dialog = UploadDialog(
+        #  Import dialog 
+        self._import_dialog = ImportDialog(
             store=self._store,
-            on_upload=self._on_upload_done,
+            on_import=self._on_import_done,
         )
 
         #  Document views 
@@ -137,7 +137,7 @@ class ModuleDetail(ft.Container):
                         ),
                         ft.Row(
                             spacing=4,
-                            controls=[self._sort_toggle, self._view_toggle, self._upload_btn],
+                            controls=[self._sort_toggle, self._view_toggle, self._import_btn],
                         ),
                     ],
                 ),
@@ -151,7 +151,7 @@ class ModuleDetail(ft.Container):
     #  lifecycle 
 
     def did_mount(self):
-        self._upload_dialog.attach_to_page(self.page)
+        self._import_dialog.attach_to_page(self.page)
 
         # Tag dialog
         self._tag_dialog = TagDialog(
@@ -240,8 +240,8 @@ class ModuleDetail(ft.Container):
         if page is None:
             return
         for item in [
-            self._upload_dialog,
-            self._upload_dialog._file_picker,
+            self._import_dialog,
+            self._import_dialog._file_picker,
             self._tag_dialog,
             self._ctx_menu,
             self._rename_dialog,
@@ -368,17 +368,17 @@ class ModuleDetail(ft.Container):
         self._refresh_documents()
         self.update()
 
-    def _open_upload(self, e):
-        self._upload_dialog.refresh_modules()
+    def _open_import(self, e):
+        self._import_dialog.refresh_modules()
         if self.module:
-            self._upload_dialog.open_for_module(self.module)
+            self._import_dialog.open_for_module(self.module)
         else:
-            self._upload_dialog.open = True
-            self._upload_dialog.update()
+            self._import_dialog.open = True
+            self._import_dialog.update()
 
-    #  upload callback 
+    #  import callback 
 
-    def _on_upload_done(self, module: Module, docs):
+    def _on_import_done(self, module: Module, docs):
         if self.module and module.title == self.module.title:
             self._reload_current_module()
 

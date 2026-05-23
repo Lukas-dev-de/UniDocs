@@ -1,11 +1,11 @@
 """
-ui/upload_dialog.py
+ui/import_dialog.py
 -------------------
-A dialog for uploading files into an existing module.
+A dialog for importing files into an existing module.
 
 Usage
 -----
-    dialog = UploadDialog(store=store, on_upload=callback)
+    dialog = ImportDialog(store=store, on_import=callback)
     page.overlay.append(dialog)
     dialog.open_for_module(module)   # pre-selects a module
     # or
@@ -14,7 +14,7 @@ Usage
 
 Callbacks
 ---------
-    on_upload(module, [Document, ...])
+    on_import(module, [Document, ...])
         Fired after files have been copied into the module folder.
 """
 
@@ -28,12 +28,12 @@ from models.module import Module
 from app_storage.module_store import ModuleStore
 
 
-class UploadDialog(ft.AlertDialog):
+class ImportDialog(ft.AlertDialog):
 
-    def __init__(self, store: ModuleStore, on_upload=None):
+    def __init__(self, store: ModuleStore, on_import=None):
         super().__init__()
         self._store = store
-        self._on_upload = on_upload
+        self._on_import = on_import
 
         #  state 
         self._picked_files: list[ft.FilePickerResultFile] = []
@@ -65,7 +65,7 @@ class UploadDialog(ft.AlertDialog):
             spacing=8,
             controls=[
                 ft.Icon(ft.Icons.UPLOAD_FILE, size=20),
-                ft.Text("Upload Documents", size=18, weight=ft.FontWeight.BOLD),
+                ft.Text("Import Documents", size=18, weight=ft.FontWeight.BOLD),
             ],
         )
 
@@ -98,7 +98,7 @@ class UploadDialog(ft.AlertDialog):
 
         self.actions = [
             ft.TextButton("Cancel", on_click=self._cancel),
-            ft.FilledButton("Upload", icon=ft.Icons.UPLOAD, on_click=self._upload),
+            ft.FilledButton("Import", icon=ft.Icons.UPLOAD, on_click=self._import),
         ]
         self.actions_alignment = ft.MainAxisAlignment.END
 
@@ -191,7 +191,7 @@ class UploadDialog(ft.AlertDialog):
         self._rebuild_file_list()
         self.update()
 
-    def _upload(self, e):
+    def _import(self, e):
         # validate
         if not self._selected_module:
             self._show_error("Please select a module.")
@@ -218,8 +218,8 @@ class UploadDialog(ft.AlertDialog):
         self._reset_state(None)
         self.update()
 
-        if self._on_upload:
-            self._on_upload(self._selected_module, added_docs)
+        if self._on_import:
+            self._on_import(self._selected_module, added_docs)
 
     def _cancel(self, e):
         self.open = False
