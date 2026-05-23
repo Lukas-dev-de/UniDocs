@@ -1,13 +1,11 @@
-# Unidocs app
+# Unidocs
 
-On first start go to Settings and set the location where your files should be stored.
+Set location for your files in the settings. Default will be under Documents/UniDocs
+changing the location will not migrate your files!
 
+You can add tags to documents by rightclicking them and applying existing tags or create new ones
 
-
-
-
-
-
+You can sort by tags by clicking on them in the filterbar that appears when you have >0 Tags
 
 # Contributing:
 
