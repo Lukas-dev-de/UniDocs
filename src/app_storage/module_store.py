@@ -38,7 +38,7 @@ GLOBAL_TAGS_FILENAME = "tags.json"
 _DEFAULT_ICON_NAME = "FOLDER"
 
 
-# ── icon helpers ────────────────────────────────────────────────────────────
+# -- icon helpers ------------------------------------------------------------
 
 def _icon_to_name(icon_value) -> str:
     if icon_value is None:
@@ -59,7 +59,7 @@ def _name_to_icon(name: str):
     return getattr(ft.Icons, name.upper(), ft.Icons.FOLDER)
 
 
-# ── store ────────────────────────────────────────────────────────────────────
+# -- store --------------------------------------------------------------------
 
 class ModuleStore:
     """
@@ -80,7 +80,7 @@ class ModuleStore:
         self._observer = None
         self._watch_lock = threading.Lock()
 
-    # ── module CRUD ──────────────────────────────────────────────────────────
+    # -- module CRUD ----------------------------------------------------------
 
     def load_all(self) -> list[Module]:
         """Return a Module for every sub-folder that contains a .meta file."""
@@ -111,7 +111,7 @@ class ModuleStore:
             old_folder.rename(new_folder)
         module.title = new_title
 
-    # ── document CRUD ────────────────────────────────────────────────────────
+    # -- document CRUD --------------------------------------------------------
 
     def add_document(self, module: Module, src_path: Path) -> Document:
         """Copy *src_path* into the module's folder and return a Document."""
@@ -146,7 +146,7 @@ class ModuleStore:
 
         old_path.rename(new_path)
 
-        # ── migrate .doc_tags key ────────────────────────────────────────────
+        # -- migrate .doc_tags key --------------------------------------------
         folder = old_path.parent
         doc_tags = self._read_doc_tags(folder)
         old_filename = old_path.name
@@ -174,7 +174,7 @@ class ModuleStore:
             path.unlink()
         module.documents = [d for d in module.documents if d.filepath != doc.filepath]
 
-    # ── tag registry CRUD ────────────────────────────────────────────────────
+    # -- tag registry CRUD ----------------------------------------------------
     #
     # tags.json format: [{"id": "<uuid>", "name": "Lecture", "color": "#..."}, ...]
     # Old name-only format (list of strings) is auto-migrated on first read.
@@ -277,7 +277,7 @@ class ModuleStore:
         doc_tags[filename] = tag_ids
         self._write_doc_tags(folder, doc_tags)
 
-    # ── filesystem watcher ───────────────────────────────────────────────────
+    # -- filesystem watcher ---------------------------------------------------
 
     def start_watching(self):
         try:
@@ -312,7 +312,7 @@ class ModuleStore:
                 self._observer.join(timeout=2)
                 self._observer = None
 
-    # ── private helpers ──────────────────────────────────────────────────────
+    # -- private helpers ------------------------------------------------------
 
     def _folder_for(self, module: Module) -> Path:
         return self.root / _safe_name(module.title)

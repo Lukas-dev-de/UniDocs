@@ -116,7 +116,7 @@ class TagDialog(ft.AlertDialog):
         ]
         self.actions_alignment = ft.MainAxisAlignment.END
 
-    # ── public ──────────────────────────────────────────────────────────────
+    # -- public --------------------------------------------------------------
 
     def open_for_document(self, doc: Document, module: Module):
         self._doc = doc
@@ -132,7 +132,7 @@ class TagDialog(ft.AlertDialog):
         self.open = True
         self.update()
 
-    # ── private ─────────────────────────────────────────────────────────────
+    # -- private -------------------------------------------------------------
 
     def _build_palette_swatches(self) -> list[ft.Control]:
         return [
