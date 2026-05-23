@@ -4,6 +4,7 @@ from app_storage.module_store import ModuleStore
 from ui.upload_dialog import UploadDialog
 from ui.context_menu import ContextMenu
 from ui.components.tag_dialog import TagDialog
+from ui.components.tag_colors import TAG_PALETTE
 from pathlib import Path
 import subprocess
 import sys
@@ -195,7 +196,42 @@ class ModuleDetail(ft.Container):
             actions_alignment=ft.MainAxisAlignment.END,
         )
 
-        for dlg in (self._rename_dialog, self._delete_dialog):
+        # Tag rename dialog
+        self._tag_rename_field = ft.TextField(label="New tag name", expand=True)
+        self._tag_rename_old: str | None = None
+        self._tag_rename_dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Text("Rename tag"),
+            content=ft.Container(width=360, content=self._tag_rename_field),
+            actions=[
+                ft.TextButton("Cancel", on_click=lambda e: self._close_dialog(self._tag_rename_dialog)),
+                ft.FilledButton("Rename", on_click=self._commit_tag_rename),
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+        )
+
+        # Tag color picker dialog
+        self._tag_color_target: str | None = None  # tag name being recolored
+        self._tag_color_dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Text("Change tag color"),
+            content=ft.Container(
+                width=320,
+                content=ft.Column(
+                    tight=True,
+                    spacing=10,
+                    controls=[self._build_color_grid()],
+                ),
+            ),
+            actions=[
+                ft.TextButton("Cancel", on_click=lambda e: self._close_dialog(self._tag_color_dialog)),
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+        )
+
+        # Add dialogs to page
+        for dlg in (self._rename_dialog, self._delete_dialog,
+                    self._tag_rename_dialog, self._tag_color_dialog):
             self.page.overlay.append(dlg)
         self.page.update()
 
@@ -210,22 +246,41 @@ class ModuleDetail(ft.Container):
             self._ctx_menu,
             self._rename_dialog,
             self._delete_dialog,
+            self._tag_rename_dialog,
+            self._tag_color_dialog,
         ]:
             if item in page.overlay:
                 page.overlay.remove(item)
 
+
+
+
+
+
+
+
+
+
+
+
     #  public 
 
     def set_module(self, module: Module):
-        self.module = module
+        # Always re-read from disk so tag colours/names changed while viewing
+        # another module are reflected immediately on switch.
+        fresh = None
+        for m in self._store.load_all():
+            if m.title == module.title:
+                fresh = m
+                break
+        self.module = fresh if fresh is not None else module
         self._active_tag_filter = None
-        # exit any active inline edit
-        self._show_title_text(module.title)
-        self._show_desc_text(module.description)
+        self._show_title_text(self.module.title)
+        self._show_desc_text(self.module.description)
         self._refresh_documents()
         self.update()
 
-    #  inline title editing 
+    #  inline TITLE editing 
 
     async def _start_title_edit(self, e):
         if self.module is None:
@@ -255,7 +310,11 @@ class ModuleDetail(ft.Container):
         self._title_click.visible = True
         self.title_field.visible = False
 
-    #  inline description editing 
+
+
+
+
+    #  inline DESCRIPTION editing 
 
     async def _start_desc_edit(self, e):
         if self.module is None:
@@ -326,10 +385,15 @@ class ModuleDetail(ft.Container):
     def _reload_current_module(self):
         if self.module is None:
             return
+        # Always re-read from disk so tag color/name changes made while viewing
+        # another module are picked up correctly.
+        refreshed = None
         for m in self._store.load_all():
             if m.title == self.module.title:
-                self.module = m
+                refreshed = m
                 break
+        if refreshed is not None:
+            self.module = refreshed
         self._refresh_documents()
         self.update()
 
@@ -347,15 +411,14 @@ class ModuleDetail(ft.Container):
         self._tag_filter_row.controls.clear()
         if all_tags:
             self._tag_filter_row.visible = True
-            # "All" chip
             all_selected = self._active_tag_filter is None
             self._tag_filter_row.controls.append(
                 self._filter_chip("All", None, all_selected)
             )
-            for tag_name in sorted(all_tags):
-                selected = self._active_tag_filter == tag_name
+            for tag in sorted(all_tags, key=lambda t: t["name"]):
+                selected = self._active_tag_filter == tag["id"]
                 self._tag_filter_row.controls.append(
-                    self._filter_chip(tag_name, tag_name, selected)
+                    self._filter_chip(tag["name"], tag["id"], selected, tag["color"])
                 )
         else:
             self._tag_filter_row.visible = False
@@ -365,10 +428,7 @@ class ModuleDetail(ft.Container):
         if self._active_tag_filter:
             docs = [
                 d for d in docs
-                if any(
-                    (t.name if hasattr(t, "name") else t) == self._active_tag_filter
-                    for t in d.tags
-                )
+                if any(t.id == self._active_tag_filter for t in d.tags)
             ]
         docs = sorted(docs, key=lambda d: d.title.lower(), reverse=not self._sort_asc)
 
@@ -378,12 +438,13 @@ class ModuleDetail(ft.Container):
             else:
                 self.documents_grid.controls.append(self._doc_tile(doc))
 
-    def _filter_chip(self, label: str, tag_name, selected: bool) -> ft.Container:
-        return ft.Container(
-            bgcolor=ft.Colors.BLUE_700 if selected else ft.Colors.GREY_800,
+    def _filter_chip(self, label: str, tag_id, selected: bool, color: str = "#1565C0") -> ft.Control:
+        chip = ft.Container(
+            bgcolor=color if selected else ft.Colors.GREY_800,
             border_radius=16,
+            border=ft.Border.all(2, color) if not selected else None,
             padding=ft.Padding.symmetric(horizontal=10, vertical=4),
-            on_click=lambda e, t=tag_name: self._set_tag_filter(t),
+            on_click=lambda e, t=tag_id: self._set_tag_filter(t),
             ink=True,
             content=ft.Text(
                 label,
@@ -391,11 +452,120 @@ class ModuleDetail(ft.Container):
                 color=ft.Colors.WHITE if selected else ft.Colors.WHITE_70,
             ),
         )
+        # "All" chip has no tag_id - no right-click menu
+        if tag_id is None:
+            return chip
+        return ft.GestureDetector(
+            content=chip,
+            on_secondary_tap_down=lambda e, tid=tag_id: self._show_tag_menu(e, tid),
+        )
 
     def _set_tag_filter(self, tag_name):
         self._active_tag_filter = tag_name
         self._refresh_documents()
         self.update()
+
+    #  tag filter context menu 
+
+    def _show_tag_menu(self, e: ft.TapEvent, tag_id: str):
+        # look up display name for dialog titles
+        tag_dict = self._store.get_tag_by_id(tag_id) or {}
+        tag_name = tag_dict.get("name", tag_id)
+        self._ctx_menu.show(
+            e.global_position.x,
+            e.global_position.y,
+            [
+                ("Change Color", ft.Icons.PALETTE_OUTLINED, ft.Colors.WHITE,
+                 lambda tid=tag_id: self._tag_change_color(tid)),
+                ("Rename", ft.Icons.DRIVE_FILE_RENAME_OUTLINE, ft.Colors.WHITE,
+                 lambda tid=tag_id, n=tag_name: self._tag_rename(tid, n)),
+                ("Delete", ft.Icons.DELETE_OUTLINE, ft.Colors.RED_400,
+                 lambda tid=tag_id, n=tag_name: self._tag_delete(tid, n)),
+            ],
+        )
+
+    def _build_color_grid(self) -> ft.Row:
+        return ft.Row(
+            wrap=True,
+            spacing=8,
+            run_spacing=8,
+            controls=[
+                ft.Container(
+                    width=30,
+                    height=30,
+                    border_radius=6,
+                    bgcolor=hex_color,
+                    tooltip=label,
+                    ink=True,
+                    on_click=lambda e, c=hex_color: self._commit_tag_color(c),
+                )
+                for hex_color, label in TAG_PALETTE
+            ],
+        )
+
+    def _tag_change_color(self, tag_id: str):
+        tag_dict = self._store.get_tag_by_id(tag_id) or {}
+        tag_name = tag_dict.get("name", tag_id)
+        self._tag_color_target = tag_id
+        self._tag_color_dialog.title = ft.Text(f'Color for "{tag_name}"')
+        self._tag_color_dialog.open = True
+        self._tag_color_dialog.update()
+
+    def _commit_tag_color(self, hex_color: str):
+        self._close_dialog(self._tag_color_dialog)
+        if not self._tag_color_target:
+            return
+        try:
+            self._store.set_tag_color(self._tag_color_target, hex_color)
+        except Exception as ex:
+            print(f"Color change failed: {ex}")
+        self._reload_current_module()
+
+    def _tag_rename(self, tag_id: str, current_name: str):
+        self._tag_rename_old = tag_id   # store ID, not name
+        self._tag_rename_field.value = current_name
+        self._tag_rename_field.error_text = ""
+        self._tag_rename_dialog.open = True
+        self._tag_rename_dialog.update()
+
+    def _commit_tag_rename(self, e):
+        new_name = (self._tag_rename_field.value or "").strip()
+        if not new_name:
+            self._tag_rename_field.error_text = "Name cannot be empty."
+            self._tag_rename_dialog.update()
+            return
+        existing = self._store.load_tag_names()
+        # get current name for the tag being renamed
+        current_tag = self._store.get_tag_by_id(self._tag_rename_old) or {}
+        current_name = current_tag.get("name", "")
+        if new_name in existing and new_name != current_name:
+            self._tag_rename_field.error_text = f'"{new_name}" already exists.'
+            self._tag_rename_dialog.update()
+            return
+        self._close_dialog(self._tag_rename_dialog)
+        try:
+            self._store.rename_global_tag(self._tag_rename_old, new_name)
+        except Exception as ex:
+            print(f"Tag rename failed: {ex}")
+        # _active_tag_filter uses IDs now, so no update needed on rename
+        self._reload_current_module()
+
+    def _tag_delete(self, tag_id: str, tag_name: str):
+        self._delete_label.value = (
+            f'Delete tag "{tag_name}"? It will be removed from all documents.'
+        )
+        self._delete_confirm_cb = lambda tid=tag_id: self._apply_tag_delete(tid)
+        self._delete_dialog.open = True
+        self._delete_dialog.update()
+
+    def _apply_tag_delete(self, tag_id: str):
+        try:
+            self._store.remove_global_tag(tag_id)
+        except Exception as ex:
+            print(f"Tag delete failed: {ex}")
+        if self._active_tag_filter == tag_id:
+            self._active_tag_filter = None
+        self._reload_current_module()
 
 
     def _ext_icon(self, suffix: str) -> str:
@@ -423,19 +593,22 @@ class ModuleDetail(ft.Container):
 
     def _doc_tile(self, doc):
         suffix = Path(doc.filepath).suffix
-        tag_names = [t.name if hasattr(t, "name") else t for t in doc.tags]
         tag_chips = ft.Row(
             wrap=True,
             spacing=4,
             run_spacing=4,
             controls=[
                 ft.Container(
-                    bgcolor=ft.Colors.BLUE_900,
+                    bgcolor=t.color if hasattr(t, "color") else "#1565C0",
                     border_radius=10,
                     padding=ft.Padding.symmetric(horizontal=6, vertical=2),
-                    content=ft.Text(n, size=9, color=ft.Colors.BLUE_200),
+                    content=ft.Text(
+                        t.name if hasattr(t, "name") else t,
+                        size=9,
+                        color=ft.Colors.WHITE,
+                    ),
                 )
-                for n in tag_names
+                for t in doc.tags
             ],
         )
         inner = ft.Container(
@@ -474,17 +647,20 @@ class ModuleDetail(ft.Container):
 
     def _doc_row(self, doc):
         suffix = Path(doc.filepath).suffix
-        tag_names = [t.name if hasattr(t, "name") else t for t in doc.tags]
         tag_chips = ft.Row(
             spacing=4,
             controls=[
                 ft.Container(
-                    bgcolor=ft.Colors.BLUE_900,
+                    bgcolor=t.color if hasattr(t, "color") else "#1565C0",
                     border_radius=10,
                     padding=ft.Padding.symmetric(horizontal=6, vertical=2),
-                    content=ft.Text(n, size=10, color=ft.Colors.BLUE_200),
+                    content=ft.Text(
+                        t.name if hasattr(t, "name") else t,
+                        size=10,
+                        color=ft.Colors.WHITE,
+                    ),
                 )
-                for n in tag_names
+                for t in doc.tags
             ],
         )
         inner = ft.Container(

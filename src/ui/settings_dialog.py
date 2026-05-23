@@ -70,8 +70,8 @@ class SettingsDialog(ft.AlertDialog):
                         "or contact me to give further ideas or suggestions.  "
                     ),
                     ft.Row(controls=[
-                        ft.Button("Create Issue", on_click=self.open_website("https://github.com/Lukas-dev-de/UniDocs/issues/new")),
-                        ft.Button("Contact", on_click=self.open_website("mailto:lukas.buschauer@gmail.com")),
+                        ft.Button("Create Issue", on_click=lambda e: self._open_url("https://github.com/Lukas-dev-de/UniDocs/issues/new")),
+                        ft.Button("Contact", on_click=lambda e: self._open_url("mailto:lukas.buschauer@gmail.com")),
                     ]),
              
                 ],
@@ -127,8 +127,6 @@ class SettingsDialog(ft.AlertDialog):
         self._status.value = msg
         self.update()
 
-    async def open_website(self, url:str):
-        if url:
-            await self.page.launch_url(url=url)
-            print(f"open website {url}")
-        print("")
+    async def _open_url(self, url: str):
+        if url and self.page:
+            await self.page.launch_url(url)

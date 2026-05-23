@@ -226,7 +226,7 @@ class _ContextMenu(ft.Container):
         self.visible = False
         self.left = 0
         self.top = 0
-        self.bgcolor = ft.Colors.GREY_850
+        self.bgcolor = ft.Colors.GREY_800
         self.border_radius = 8
         self.border = ft.Border.all(1, ft.Colors.OUTLINE_VARIANT)
         self.shadow = ft.BoxShadow(blur_radius=12, color=ft.Colors.BLACK54)
