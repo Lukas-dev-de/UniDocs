@@ -68,7 +68,7 @@ class ModuleSidebar(ft.Container):
         self._store._on_change = self._on_fs_change
         self._store.start_watching()
 
-    # ── lifecycle ──────────────────────────────────────────────────────────
+    #  lifecycle 
 
     def did_mount(self):
         self._settings_dialog = SettingsDialog(
@@ -108,7 +108,7 @@ class ModuleSidebar(ft.Container):
             if hasattr(self, "_settings_dialog") and item in page.overlay:
                 page.overlay.remove(item)
 
-    # ── settings ───────────────────────────────────────────────────────────
+    #  settings 
 
     def _open_settings(self, e):
         self._settings_dialog.open = True
@@ -121,7 +121,7 @@ class ModuleSidebar(ft.Container):
         self._store.start_watching()
         self._reload_and_update()
 
-    # ── store helpers ──────────────────────────────────────────────────────
+    #  store helpers 
 
     def _load_from_store(self):
         self.modules_list.controls.clear()
@@ -154,7 +154,7 @@ class ModuleSidebar(ft.Container):
         self.description_field.value = ""
         self.update()
 
-    # ── context menu ───────────────────────────────────────────────────────
+    #  context menu 
 
     def _show_module_menu(self, e: ft.TapEvent, module: Module):
         self._ctx_menu.show(
@@ -165,7 +165,7 @@ class ModuleSidebar(ft.Container):
             ],
         )
 
-    # ── dialog helpers ─────────────────────────────────────────────────────
+    #  dialog helpers 
 
     def _close_dialog(self, dlg):
         dlg.open = False
@@ -182,7 +182,7 @@ class ModuleSidebar(ft.Container):
         if self._delete_confirm_cb:
             self._delete_confirm_cb()
 
-    # ── module actions ─────────────────────────────────────────────────────
+    #  module actions 
 
     def _module_delete(self, module: Module):
         def on_confirm():
@@ -196,7 +196,7 @@ class ModuleSidebar(ft.Container):
             on_confirm,
         )
 
-    # ── live-sync ──────────────────────────────────────────────────────────
+    #  live-sync 
 
     def _on_fs_change(self):
         try:
@@ -212,7 +212,7 @@ class ModuleSidebar(ft.Container):
         self.update()
 
 
-# ── Floating context menu (shared helper) ──────────────────────────────────────
+#  Floating context menu (shared helper) 
 
 class _ContextMenu(ft.Container):
     """
@@ -226,7 +226,7 @@ class _ContextMenu(ft.Container):
         self.visible = False
         self.left = 0
         self.top = 0
-        self.bgcolor = ft.Colors.GREY_850
+        self.bgcolor = ft.Colors.GREY_800
         self.border_radius = 8
         self.border = ft.Border.all(1, ft.Colors.OUTLINE_VARIANT)
         self.shadow = ft.BoxShadow(blur_radius=12, color=ft.Colors.BLACK54)

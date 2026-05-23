@@ -35,11 +35,11 @@ class UploadDialog(ft.AlertDialog):
         self._store = store
         self._on_upload = on_upload
 
-        # ── state ─────────────────────────────────────────────────────────
+        #  state 
         self._picked_files: list[ft.FilePickerResultFile] = []
         self._selected_module: Module | None = None
 
-        # ── module dropdown ───────────────────────────────────────────────
+        #  module dropdown 
         self._module_dropdown = ft.Dropdown(
             label="Target module",
             hint_text="Select a module…",
@@ -47,7 +47,7 @@ class UploadDialog(ft.AlertDialog):
             on_select=self._on_module_changed,
         )
 
-        # ── file list display ─────────────────────────────────────────────
+        #  file list display 
         self._file_list = ft.Column(spacing=4, tight=True)
 
         self._no_files_text = ft.Text(
@@ -59,7 +59,7 @@ class UploadDialog(ft.AlertDialog):
 
         self._status = ft.Text("", color=ft.Colors.RED_400, size=12)
 
-        # ── layout ────────────────────────────────────────────────────────
+        #  layout 
         self.modal = True
         self.title = ft.Row(
             spacing=8,
@@ -105,7 +105,7 @@ class UploadDialog(ft.AlertDialog):
         # Attach the file picker when the dialog is first created
         self.on_dismiss = self._reset_state
 
-    # ── public API ─────────────────────────────────────────────────────────
+    #  public API 
 
     def open_for_module(self, module: Module):
         """Open the dialog with *module* pre-selected in the dropdown."""
@@ -118,7 +118,7 @@ class UploadDialog(ft.AlertDialog):
         """Call this after modules are added/removed to keep the dropdown fresh."""
         self._refresh_dropdown()
 
-    # ── lifecycle (called by ModuleDetail.did_mount) ───────────────────────
+    #  lifecycle (called by ModuleDetail.did_mount) 
 
     def attach_to_page(self, page: ft.Page):
         if self not in page.overlay:
@@ -126,7 +126,7 @@ class UploadDialog(ft.AlertDialog):
 
         page.update()
 
-    # ── private ────────────────────────────────────────────────────────────
+    #  private 
 
     def _refresh_dropdown(self):
         modules = self._store.load_all()

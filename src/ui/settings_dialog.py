@@ -37,7 +37,7 @@ class SettingsDialog(ft.AlertDialog):
 
         self._status = ft.Text("", color=ft.Colors.RED_400, size=12)
 
-        # ── layout ────────────────────────────────────────────────────────
+        #  layout 
         self.modal = True
         self.title = ft.Row(
             controls=[
@@ -47,13 +47,14 @@ class SettingsDialog(ft.AlertDialog):
             spacing=8,
         )
 
+
         self.content = ft.Container(
             width=480,
             content=ft.Column(
                 tight=True,
                 spacing=16,
                 controls=[
-                    # ── UniDocs location ──────────────────────────────────
+                    #  UniDocs location 
                     ft.Text("UniDocs location", weight=ft.FontWeight.W_600),
                     ft.Row(
                         controls=[
@@ -62,16 +63,17 @@ class SettingsDialog(ft.AlertDialog):
                     ),
                     self._status,
 
-                    # ── Bug Reporting ──────────────────────────────────
+                    #  Bug Reporting 
                     ft.Markdown(
                         "If you discover any bugs, errors or you have a suggestion " \
                         "feel free to create an issue on GitHub, "
                         "or contact me to give further ideas or suggestions.  "
                     ),
-                    ft.Markdown(
-                        "   [Create Issue](https://github.com/Lukas-dev-de/UniDocs/issues/new) "
-                        "   [Contact](mailto:lukas.buschauer@gmail.com) "
-                    ),
+                    ft.Row(controls=[
+                        ft.Button("Create Issue", on_click=lambda e: self._open_url("https://github.com/Lukas-dev-de/UniDocs/issues/new")),
+                        ft.Button("Contact", on_click=lambda e: self._open_url("mailto:lukas.buschauer@gmail.com")),
+                    ]),
+             
                 ],
             ),
         )
@@ -82,7 +84,7 @@ class SettingsDialog(ft.AlertDialog):
         ]
         self.actions_alignment = ft.MainAxisAlignment.END
 
-    # ── private ────────────────────────────────────────────────────────────
+    #  private 
 
     def _cancel(self, e):
         self._status.value = ""
@@ -124,3 +126,7 @@ class SettingsDialog(ft.AlertDialog):
     def _show_error(self, msg: str):
         self._status.value = msg
         self.update()
+
+    async def _open_url(self, url: str):
+        if url and self.page:
+            await self.page.launch_url(url)

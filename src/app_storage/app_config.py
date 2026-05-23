@@ -34,7 +34,7 @@ class AppConfig:
         self._data: dict = {}
         self._load()
 
-    # ── public properties ──────────────────────────────────────────────────
+    #  public properties 
 
     @property
     def unidocs_location(self) -> Path:
@@ -48,7 +48,7 @@ class AppConfig:
         self._data["unidocs_location"] = str(value)
         self._save()
 
-    # ── persistence ────────────────────────────────────────────────────────
+    #  persistence 
 
     def _load(self):
         try:
