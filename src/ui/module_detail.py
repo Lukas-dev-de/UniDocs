@@ -1,5 +1,6 @@
 import flet as ft
 from models.module import Module
+from models.document import Document
 from app_storage.module_store import ModuleStore
 from ui.import_dialog import ImportDialog
 from ui.context_menu import ContextMenu
@@ -591,7 +592,7 @@ class ModuleDetail(ft.Container):
         }
         return mapping.get(suffix, ft.Icons.INSERT_DRIVE_FILE)
 
-    def _doc_tile(self, doc):
+    def _doc_tile(self, doc:Document):
         suffix = Path(doc.filepath).suffix
         tag_chips = ft.Row(
             wrap=True,
@@ -644,7 +645,7 @@ class ModuleDetail(ft.Container):
             content=ft.DragTarget(
                 content=inner,
                 on_will_accept=lambda e : True,
-                on_accept=lambda e : self._on_doc_accept_tag(e, doc=doc.title)),
+                on_accept=lambda e : self._on_doc_accept_tag(e, doc=doc)),
             on_secondary_tap_down=lambda e, d=doc: self._show_doc_menu(e, d),
         )
 
@@ -700,11 +701,31 @@ class ModuleDetail(ft.Container):
             on_secondary_tap_down=lambda e, d=doc: self._show_doc_menu(e, d),
         )
     
-    def _on_doc_accept_tag(self, e: ft.DragTargetEvent, doc):
-        tag = e.src.data # get tag_id from drag source
-        
-        print(f"Add tag: '{tag}' to document '{doc}'")
-        
+    
+    def _on_doc_accept_tag(self, e: ft.DragTargetEvent, doc : Document):
+        tag_id: str = e.src.data
+
+        # No-op if already assigned
+        if any(t.id == tag_id for t in doc.tags):
+            return
+
+        tag_dict = self._store.get_tag_by_id(tag_id)
+        if tag_dict is None:
+            return  # tag was deleted between drag start and drop
+
+        # Persist: merge new ID with existing ones
+        current_ids = [t.id for t in doc.tags]
+        self._store.save_doc_tags(self.module, doc, current_ids + [tag_id])
+
+        # Update in-memory so the tile reflects the change immediately
+        from models.tag import Tag
+        doc.tags.append(Tag(tag_dict["id"], tag_dict["name"], tag_dict["color"]))
+
+        print(f"Add tag: '{tag_id}' to document '{doc.title}'")
+
+        self._refresh_documents()
+        self.update()
+
     #  document context menu 
 
     def _show_doc_menu(self, e: ft.TapEvent, doc):
