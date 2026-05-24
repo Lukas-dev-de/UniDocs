@@ -32,34 +32,29 @@ class ModuleSidebar(ft.Container):
         self.content = ft.Column(
             expand=True,
             alignment="CENTER",
-            controls=[
-                ft.Column(
-                    alignment="CENTER",
-                    controls=[
-                        ft.PopupMenuButton(
-                            icon=ft.Icons.ADD_BOX,
-                            tooltip="Add Module",
-                            items=[
-                                ft.PopupMenuItem(
-                                    content=ft.Row(
-                                        controls=[self.icon_selector, self.title_field]
-                                    ),
-                                    padding=8,
-                                ),
-                                ft.PopupMenuItem(
-                                    content=self.description_field, padding=8
-                                ),
-                            ],
-                            align=ft.Alignment.TOP_CENTER,
+            controls=[ 
+                ft.PopupMenuButton(
+                    icon=ft.Icons.ADD_BOX,
+                    tooltip="Add Module",
+                    items=[
+                        ft.PopupMenuItem(
+                            content=ft.Row(
+                                controls=[self.icon_selector, self.title_field]
+                            ),
+                            padding=8,
                         ),
-                        ft.IconButton(
-                            icon=ft.Icons.SETTINGS,
-                            tooltip="Settings",
-                            on_click=self._open_settings,
+                        ft.PopupMenuItem(
+                            content=self.description_field, padding=8
                         ),
                     ],
+                    align=ft.Alignment.TOP_CENTER,
                 ),
                 self.modules_list,
+                ft.IconButton(
+                    icon=ft.Icons.SETTINGS,
+                    tooltip="Settings",
+                    on_click=self._open_settings,
+                ),
             ],
         )
 
