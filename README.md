@@ -13,19 +13,19 @@ Be aware, first start might take longer than usual ... I don't know why yet
 
 ## Stuff to implement:
 #### low effort
-- add more icons for selection
-- implement change/edit module icon 
+- [x] add more icons for selection
+- [] implement change/edit module icon 
 
 #### medium effort 
-- add colors to modules
-- renaming files directly in import/import menu 
-- get links in settings to work 
-- applying tags by drag n dropping them from the filter bar onto documents 
-- selecting multiple files (for example with ctl+click or middle click) to apply tags or delete multiple at once
+- [] add colors to modules
+- [] renaming files directly in import/import menu 
+- [] get links in settings to work 
+- [] applying tags by drag n dropping them from the filter bar onto documents 
+- [] selecting multiple files (for example with ctl+click or middle click) to apply tags or delete multiple at once
 
 #### high effort
-- implement custom themes 
-- file syncing (for example via personal self-hosting, github or googledrive ...)
+- [] implement custom themes 
+- [] file syncing (for example via self-hosting, github or googledrive ...)
 
 
 
