@@ -3,7 +3,7 @@ from pathlib import Path
 from app_storage.module_store import ModuleStore
 from app_storage.app_config import AppConfig
 
-CURRENT_VERSION = "2.0.2"
+CURRENT_VERSION = "2.1.1"
 
 class SettingsDialog(ft.AlertDialog):
     """

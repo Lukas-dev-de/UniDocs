@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## v2.1.1
+- fix:
+    - dragging tags onto documents now also works in list view
+    - settings menu now shows the correct version 
+
 ## v2.1.0
 - new:
     - tags can be added by dragging from the filter bar onto documents

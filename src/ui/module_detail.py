@@ -645,7 +645,8 @@ class ModuleDetail(ft.Container):
             content=ft.DragTarget(
                 content=inner,
                 on_will_accept=lambda e : True,
-                on_accept=lambda e : self._on_doc_accept_tag(e, doc=doc)),
+                on_accept=lambda e : self._on_doc_accept_tag(e, doc=doc)
+            ),
             on_secondary_tap_down=lambda e, d=doc: self._show_doc_menu(e, d),
         )
 
@@ -697,7 +698,11 @@ class ModuleDetail(ft.Container):
             ),
         )
         return ft.GestureDetector(
-            content=inner,
+            content=ft.DragTarget(
+                content=inner,
+                on_will_accept=lambda e : True,
+                on_accept=lambda e : self._on_doc_accept_tag(e, doc=doc)
+            ),
             on_secondary_tap_down=lambda e, d=doc: self._show_doc_menu(e, d),
         )
     
