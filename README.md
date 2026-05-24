@@ -18,6 +18,7 @@ Be aware, first start might take longer than usual ... I don't know why yet
 - [] feature: select for multiple tags by ctl click on tag filters
 
 #### medium effort 
+- [] feature: add documents to module per drag n drop
 - [] feature: add colors to modules
 - [] feature: renaming files directly in import/import menu 
 - [] fix: get links in settings to work 
