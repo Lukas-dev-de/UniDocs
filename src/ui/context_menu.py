@@ -18,34 +18,38 @@ Usage
 import flet as ft
 
 
-class ContextMenu(ft.Container):
-    """
-    Lightweight floating context menu rendered in page.overlay.
-    Positioned at cursor coordinates passed to .show().
-    Dismisses itself when an item is selected.
-    """
-
+class ContextMenu(ft.Stack):
     def __init__(self):
         super().__init__()
+
         self._items_col = ft.Column(spacing=0, tight=True)
+
+        self.menu_container = ft.Container(
+            content=self._items_col,
+            bgcolor=ft.Colors.GREY_900,
+            border_radius=8,
+            border=ft.Border.all(1, ft.Colors.OUTLINE_VARIANT),
+            shadow=ft.BoxShadow(blur_radius=12, color=ft.Colors.BLACK_54),
+            padding=ft.Padding.symmetric(vertical=4),
+            left=0,
+            top=0,
+        )
+
+        # full-screen click catcher
+        self.scrim = ft.Container(
+            expand=True,
+            bgcolor=ft.Colors.TRANSPARENT,
+            on_click=lambda e: self.hide(),
+        )
+
+        self.controls = [self.scrim, self.menu_container]
+
         self.visible = False
-        self.left = 0
-        self.top = 0
-        self.bgcolor = ft.Colors.GREY_900
-        self.border_radius = 8
-        self.border = ft.Border.all(1, ft.Colors.OUTLINE_VARIANT)
-        self.shadow = ft.BoxShadow(blur_radius=12, color=ft.Colors.BLACK_54)
-        self.padding = ft.Padding.symmetric(vertical=4)
-        self.content = self._items_col
         self.z_index = 9999
 
     def show(self, x: float, y: float, items: list[tuple]):
-        """
-        Display the menu at (x, y).
-
-        items: list of (label: str, icon: ft.Icons, color, callback: callable)
-        """
         self._items_col.controls.clear()
+
         for label, icon, color, cb in items:
             self._items_col.controls.append(
                 ft.TextButton(
@@ -56,16 +60,13 @@ class ContextMenu(ft.Container):
                             ft.Text(label, color=color, size=13),
                         ],
                     ),
-                    style=ft.ButtonStyle(
-                        padding=ft.Padding.symmetric(horizontal=14, vertical=6),
-                        shape=ft.RoundedRectangleBorder(radius=0),
-                        overlay_color=ft.Colors.WHITE_10,
-                    ),
                     on_click=lambda e, fn=cb: self._select(fn),
                 )
             )
-        self.left = x
-        self.top = y
+
+        self.menu_container.left = x
+        self.menu_container.top = y
+
         self.visible = True
         self.update()
 
