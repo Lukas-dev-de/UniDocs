@@ -17,11 +17,13 @@ Be aware, first start might take longer than usual ... I don't know why yet
 - [] implement change/edit module icon 
 
 #### medium effort 
-- [] add colors to modules
-- [] renaming files directly in import/import menu 
-- [] get links in settings to work 
-- [] applying tags by drag n dropping them from the filter bar onto documents 
-- [] selecting multiple files (for example with ctl+click or middle click) to apply tags or delete multiple at once
+- [] feature: add colors to modules
+- [] feature: renaming files directly in import/import menu 
+- [] fix: get links in settings to work 
+- [] feature: applying tags by drag n dropping them from the filter bar onto documents 
+- [] feature: selecting multiple files (for example with ctl+click or middle click) to apply tags or delete multiple at once
+- [] feature: reorganise modules order in sidebar drag n drop
+- [] feature: grouping modules in sidebar
 
 #### high effort
 - [] implement custom themes 
