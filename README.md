@@ -7,6 +7,8 @@ You can add tags to documents by rightclicking them and applying existing tags o
 
 You can sort by tags by clicking on them in the filterbar that appears when you have >0 Tags
 
+Be aware, first start might take longer than usual ... I don't know why yet
+
 # Contributing:
 
 ## Stuff to implement:
