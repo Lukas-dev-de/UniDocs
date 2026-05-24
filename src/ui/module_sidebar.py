@@ -9,7 +9,6 @@ from app_storage.module_store import ModuleStore
 
 @ft.control
 class ModuleSidebar(ft.Container):
-    #expand: int = 1
     padding: int = 8
     border_radius: int = 16
     bgcolor: ft.Colors = ft.Colors.GREY_900
