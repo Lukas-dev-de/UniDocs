@@ -14,7 +14,8 @@ Be aware, first start might take longer than usual ... I don't know why yet
 ## Stuff to implement:
 #### low effort
 - [x] add more icons for selection
-- [] implement change/edit module icon 
+- [] feature: change/edit module icon like title
+- [] feature: select for multiple tags by ctl click on tag filters
 
 #### medium effort 
 - [] feature: add colors to modules
