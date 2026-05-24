@@ -12,9 +12,9 @@ DEFAULT_TAG_COLOR = "#1565C0"
 
 class Tag:
     def __init__(self, id: str, name: str, color: str = DEFAULT_TAG_COLOR):
-        self.id = id          # stable UUID string – stored in .doc_tags
-        self.name = name      # display label – can change freely
-        self.color = color    # hex string
+        self.id = id
+        self.name = name
+        self.color = color
 
     # convenience constructor used when creating a brand-new tag
     @classmethod
