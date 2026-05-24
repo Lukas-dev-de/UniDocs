@@ -3,6 +3,7 @@ from pathlib import Path
 from app_storage.module_store import ModuleStore
 from app_storage.app_config import AppConfig
 
+CURRENT_VERSION = "2.0.1"
 
 class SettingsDialog(ft.AlertDialog):
     """
@@ -37,42 +38,41 @@ class SettingsDialog(ft.AlertDialog):
 
         self._status = ft.Text("", color=ft.Colors.RED_400, size=12)
 
-        #  layout 
+        #  LAYOUT 
         self.modal = True
-        self.title = ft.Row(
-            controls=[
-                ft.Icon(ft.Icons.SETTINGS, size=20),
-                ft.Text("Settings", size=18, weight=ft.FontWeight.BOLD),
-            ],
-            spacing=8,
-        )
 
+        self.title = ft.Row(controls=[
+            ft.Row(
+                controls=[
+                    ft.Icon(ft.Icons.SETTINGS, size=20),
+                    ft.Text("Settings", size=18, weight=ft.FontWeight.BOLD),
+                    ft.Text(f"Version {CURRENT_VERSION}", size=12,)
+                ],
+                spacing=8
+            ),
+        ])
 
         self.content = ft.Container(
             width=480,
             content=ft.Column(
                 tight=True,
-                spacing=16,
+                spacing=20,
                 controls=[
-                    #  UniDocs location 
-                    ft.Text("UniDocs location", weight=ft.FontWeight.W_600),
-                    ft.Row(
-                        controls=[
-                            self._path_field,
-                        ],
-                    ),
-                    self._status,
+                    #  UniDocs folder location 
+                    ft.Column(spacing=0, controls=[
+                        ft.Text("UniDocs location", weight=ft.FontWeight.W_600),
+                        ft.Row(controls=[self._path_field]),
+                        self._status,
+                    ]),
+
+                    # Custom Themes
+                    ft.Column(controls=[
+                        ft.Text("Themes", weight=ft.FontWeight.W_600),
+                        ft.Text("Coming soon"),
+                    ]),
 
                     #  Bug Reporting 
-                    ft.Markdown(
-                        "If you discover any bugs, errors or you have a suggestion " \
-                        "feel free to create an issue on GitHub, "
-                        "or contact me to give further ideas or suggestions.  "
-                    ),
-                    ft.Row(controls=[
-                        ft.Button("Create Issue", on_click=lambda e: self._open_url("https://github.com/Lukas-dev-de/UniDocs/issues/new")),
-                        ft.Button("Contact", on_click=lambda e: self._open_url("mailto:lukas.buschauer@gmail.com")),
-                    ]),
+                    ft.Text("GitHub: https://github.com/Lukas-dev-de/UniDocs/"),
              
                 ],
             ),
@@ -82,7 +82,6 @@ class SettingsDialog(ft.AlertDialog):
             ft.TextButton("Cancel", on_click=self._cancel),
             ft.FilledButton("Apply", on_click=self._apply),
         ]
-        self.actions_alignment = ft.MainAxisAlignment.END
 
     #  private 
 
@@ -126,7 +125,3 @@ class SettingsDialog(ft.AlertDialog):
     def _show_error(self, msg: str):
         self._status.value = msg
         self.update()
-
-    async def _open_url(self, url: str):
-        if url and self.page:
-            await self.page.launch_url(url)
