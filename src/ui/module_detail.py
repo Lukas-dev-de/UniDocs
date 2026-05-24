@@ -439,7 +439,7 @@ class ModuleDetail(ft.Container):
                 self.documents_grid.controls.append(self._doc_tile(doc))
 
     def _filter_chip(self, label: str, tag_id, selected: bool, color: str = "#1565C0") -> ft.Control:
-        chip = ft.Container(
+        chip_content = ft.Container(
             bgcolor=color if selected else ft.Colors.GREY_800,
             border_radius=16,
             border=ft.Border.all(2, color) if not selected else None,
@@ -454,9 +454,9 @@ class ModuleDetail(ft.Container):
         )
         # "All" chip has no tag_id - no right-click menu
         if tag_id is None:
-            return chip
+            return chip_content
         return ft.GestureDetector(
-            content=chip,
+            content=ft.Draggable(data=tag_id, content=chip_content),
             on_secondary_tap_down=lambda e, tid=tag_id: self._show_tag_menu(e, tid),
         )
 
@@ -641,7 +641,10 @@ class ModuleDetail(ft.Container):
             ),
         )
         return ft.GestureDetector(
-            content=inner,
+            content=ft.DragTarget(
+                content=inner,
+                on_will_accept=lambda e : True,
+                on_accept=lambda e : self._on_doc_accept_tag(e, doc=doc.title)),
             on_secondary_tap_down=lambda e, d=doc: self._show_doc_menu(e, d),
         )
 
@@ -696,7 +699,12 @@ class ModuleDetail(ft.Container):
             content=inner,
             on_secondary_tap_down=lambda e, d=doc: self._show_doc_menu(e, d),
         )
-
+    
+    def _on_doc_accept_tag(self, e: ft.DragTargetEvent, doc):
+        tag = e.src.data # get tag_id from drag source
+        
+        print(f"Add tag: '{tag}' to document '{doc}'")
+        
     #  document context menu 
 
     def _show_doc_menu(self, e: ft.TapEvent, doc):
