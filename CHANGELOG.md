@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## v2.1.0
+- new:
+    - tags can be added by dragging from the filter bar onto documents
+
 ## v2.0.2
 - change:
     - moved settings icon from top left to bottom left
