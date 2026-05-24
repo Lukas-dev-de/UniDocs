@@ -14,22 +14,22 @@ Be aware, first start might take longer than usual ... I don't know why yet
 ## Stuff to implement:
 #### low effort
 - [x] add more icons for selection
-- [] feature: change/edit module icon like title
-- [] feature: select for multiple tags by ctl click on tag filters
+- [ ] feature: change/edit module icon like title
+- [ ] feature: select for multiple tags by ctl click on tag filters
 
 #### medium effort 
-- [] feature: add documents to module per drag n drop
-- [] feature: add colors to modules
-- [] feature: renaming files directly in import/import menu 
-- [] fix: get links in settings to work 
-- [] feature: applying tags by drag n dropping them from the filter bar onto documents 
-- [] feature: selecting multiple files (for example with ctl+click or middle click) to apply tags or delete multiple at once
-- [] feature: reorganise modules order in sidebar drag n drop
-- [] feature: grouping modules in sidebar
+- [x] feature: applying tags by drag n dropping them from the filter bar onto documents 
+- [ ] feature: add documents to module per drag n drop
+- [ ] feature: add colors to modules
+- [ ] feature: renaming files directly in import/import menu 
+- [ ] fix: get links in settings to work 
+- [ ] feature: selecting multiple files (for example with ctl+click or middle click) to apply tags or delete multiple at once
+- [ ] feature: reorganise modules order in sidebar by draging
+- [ ] feature: grouping modules in sidebar
 
 #### high effort
-- [] implement custom themes 
-- [] file syncing (for example via self-hosting, github or googledrive ...)
+- [ ] implement custom themes 
+- [ ] file syncing (for example via self-hosting, github or googledrive ...)
 
 
 
