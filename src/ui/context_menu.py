@@ -17,11 +17,13 @@ Usage
 
 import flet as ft
 
-
+# See AlertDialog for future rework
 class ContextMenu(ft.Stack):
     def __init__(self):
         super().__init__()
-
+        self.visible = False
+        self.z_index = 9999
+        
         self._items_col = ft.Column(spacing=0, tight=True)
 
         self.menu_container = ft.Container(
@@ -44,8 +46,7 @@ class ContextMenu(ft.Stack):
 
         self.controls = [self.scrim, self.menu_container]
 
-        self.visible = False
-        self.z_index = 9999
+        
 
     def show(self, x: float, y: float, items: list[tuple]):
         self._items_col.controls.clear()
