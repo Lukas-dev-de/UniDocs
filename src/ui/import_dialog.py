@@ -283,8 +283,7 @@ class ImportDialog(ft.AlertDialog):
         for f in self._picked_files:
             display_name = self._display_names.get(f.name, f.name)
 
-            # rename_document takes a stem only; strip extension if the user
-            # happened to type one (e.g. "my notes.pdf" -> "my notes")
+            # strip name extension
             display_stem = (
                 Path(display_name).stem
                 if "." in display_name
@@ -292,12 +291,12 @@ class ImportDialog(ft.AlertDialog):
             )
 
             try:
-                # 1. copy file into module folder under its original name
+                # copy file into module folder under its original name
                 doc = self._store.add_document(
                     self._selected_module, Path(f.path)
                 )
 
-                # 2. rename on disk if the user changed the name
+                # rename on disk if name changed 
                 if display_stem != doc.title:
                     self._store.rename_document(doc, display_stem)
 
@@ -310,7 +309,6 @@ class ImportDialog(ft.AlertDialog):
             self._show_error("\n".join(errors))
             return
 
-        # success
         self.open = False
         self._reset_state(None)
         self.update()
