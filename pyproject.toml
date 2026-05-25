@@ -1,6 +1,6 @@
 [project]
 name = "unidocs"
-version = "2.1.1" # change this in src/ui/settings_dialog.py too !
+version = "2.2.0" # change this in src/ui/settings_dialog.py too !
 description = "Document management and productivity application"
 readme = "README.md"
 requires-python = ">=3.10"
