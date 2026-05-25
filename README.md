@@ -19,17 +19,17 @@ Be aware, first start might take longer than usual ... I don't know why yet
 
 #### medium effort 
 - [x] feature: applying tags by drag n dropping them from the filter bar onto documents 
+- [x] feature: renaming files directly in import/import menu 
 - [ ] feature: add documents to module per drag n drop
 - [ ] feature: add colors to modules
-- [ ] feature: renaming files directly in import/import menu 
-- [ ] fix: get links in settings to work 
+- [ ] fix: get links to repository in settings to work 
 - [ ] feature: selecting multiple files (for example with ctl+click or middle click) to apply tags or delete multiple at once
 - [ ] feature: reorganise modules order in sidebar by draging
 - [ ] feature: grouping modules in sidebar
 
 #### high effort
-- [ ] implement custom themes 
-- [ ] file syncing (for example via self-hosting, github or googledrive ...)
+- [ ] feature: implement custom themes 
+- [ ] feature: file syncing (for example via self-hosting, github or googledrive ...)
 
 
 

@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## v2.2.0
+- feature:
+    - rename files directly in import menu
+- fix:
+    - in the import menu when selecting files and then selecting more files it would forget the firstly selected ones. This is now no longer the case. Instead they now just get added to the list
+
 ## v2.1.1
 - fix:
     - dragging tags onto documents now also works in list view
