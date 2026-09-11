@@ -79,6 +79,8 @@ class ModuleStore:
         self._on_change = on_change
         self._observer = None
         self._watch_lock = threading.Lock()
+        self._tags_cache = None
+        self._cache_lock = threading.RLock()
 
     # -- module CRUD ----------------------------------------------------------
 
@@ -181,6 +183,12 @@ class ModuleStore:
 
     def load_all_tags(self) -> list[dict]:
         """Return the global tag list as [{"id": ..., "name": ..., "color": ...}, ...]."""
+        with self._cache_lock:
+            if self._tags_cache is None:
+                self._tags_cache = self._read_tags_from_disk()
+            return self._tags_cache
+
+    def _read_tags_from_disk(self) -> list[dict]:
         path = self.root / GLOBAL_TAGS_FILENAME
         try:
             raw = json.loads(path.read_text(encoding="utf-8"))
@@ -213,10 +221,9 @@ class ModuleStore:
     def add_global_tag(self, name: str, color: str | None = None) -> dict:
         """Add a new tag to the global registry. Returns the new tag dict."""
         import uuid
+        with self._cache_lock:
         tags = self.load_all_tags()
         # prevent duplicate names
-        if any(t["name"] == name for t in tags):
-            # return the existing one
             for t in tags:
                 if t["name"] == name:
                     return t
@@ -227,6 +234,7 @@ class ModuleStore:
 
     def set_tag_color(self, tag_id: str, color: str) -> None:
         """Update the color for a tag (identified by ID)."""
+        with self._cache_lock:
         tags = self.load_all_tags()
         for t in tags:
             if t["id"] == tag_id:
@@ -239,6 +247,7 @@ class ModuleStore:
         Rename a tag in the global registry.
         Because .doc_tags stores IDs, no per-module migration is needed.
         """
+        with self._cache_lock:
         tags = self.load_all_tags()
         existing_names = [t["name"] for t in tags if t["id"] != tag_id]
         if new_name in existing_names:
@@ -253,6 +262,7 @@ class ModuleStore:
         """
         Remove a tag from the global registry and strip it from all .doc_tags files.
         """
+        with self._cache_lock:
         tags = [t for t in self.load_all_tags() if t["id"] != tag_id]
         self._write_global_tags(tags)
 
@@ -378,9 +388,11 @@ class ModuleStore:
         )
 
     def _write_global_tags(self, tags: list[dict]) -> None:
+        with self._cache_lock:
         (self.root / GLOBAL_TAGS_FILENAME).write_text(
             json.dumps(tags, ensure_ascii=False, indent=2), encoding="utf-8"
         )
+            self._tags_cache = tags
 
 
 def _safe_name(title: str) -> str:
