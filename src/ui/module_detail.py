@@ -278,13 +278,9 @@ class ModuleDetail(ft.Container):
         if self._list_view:
             self._view_toggle.icon = ft.Icons.GRID_VIEW
             self._view_toggle.tooltip = "Switch to grid view"
-            self.documents_grid.visible = False
-            self.documents_list.visible = True
         else:
             self._view_toggle.icon = ft.Icons.VIEW_LIST
             self._view_toggle.tooltip = "Switch to list view"
-            self.documents_grid.visible = True
-            self.documents_list.visible = False
         self._refresh_documents()
         self.update()
 
@@ -317,13 +313,35 @@ class ModuleDetail(ft.Container):
         self._refresh_documents()
         self.update()
 
-    #  document rendering 
+    def _get_filtered_and_sorted_docs(self) -> list:
+        if self.module is None:
+            return []
+
+        docs = self.module.documents
+        if self._active_tag_filter:
+            docs = [
+                d for d in docs
+                if any(t.id == self._active_tag_filter for t in d.tags)
+            ]
+        return sorted(docs, key=lambda d: d.title.lower(), reverse=not self._sort_asc)
+
+    def _render_grid(self, docs):
+        self.documents_grid.controls.clear()
+        for doc in docs:
+            self.documents_grid.controls.append(self._doc_tile(doc))
+
+    def _render_list(self, docs):
+        self.documents_list.controls.clear()
+        for doc in docs:
+            self.documents_list.controls.append(self._doc_row(doc))
+
+    #  document rendering
 
     def _refresh_documents(self):
-        self.documents_grid.controls.clear()
-        self.documents_list.controls.clear()
         if self.module is None:
             self._tag_filter_row.visible = False
+            self.documents_grid.controls.clear()
+            self.documents_list.controls.clear()
             return
 
         # --- rebuild tag filter bar ---
@@ -343,20 +361,17 @@ class ModuleDetail(ft.Container):
         else:
             self._tag_filter_row.visible = False
 
-        # --- filter and sort docs ---
-        docs = self.module.documents
-        if self._active_tag_filter:
-            docs = [
-                d for d in docs
-                if any(t.id == self._active_tag_filter for t in d.tags)
-            ]
-        docs = sorted(docs, key=lambda d: d.title.lower(), reverse=not self._sort_asc)
+        # --- get data and render ---
+        docs = self._get_filtered_and_sorted_docs()
 
-        for doc in docs:
-            if self._list_view:
-                self.documents_list.controls.append(self._doc_row(doc))
-            else:
-                self.documents_grid.controls.append(self._doc_tile(doc))
+        if self._list_view:
+            self.documents_grid.visible = False
+            self.documents_list.visible = True
+            self._render_list(docs)
+        else:
+            self.documents_grid.visible = True
+            self.documents_list.visible = False
+            self._render_grid(docs)
 
     def _filter_chip(self, label: str, tag_id, selected: bool, color: str = "#1565C0") -> ft.Control:
         chip_content = ft.Container(
@@ -543,7 +558,7 @@ class ModuleDetail(ft.Container):
             on_secondary_tap_down=lambda e, d=doc: self._show_doc_menu(e, d),
         )
     
-    
+
     def _on_doc_accept_tag(self, e: ft.DragTargetEvent, doc : Document):
         tag_id: str = e.src.data
 
