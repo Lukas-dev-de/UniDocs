@@ -4,6 +4,7 @@ from models.document import Document
 from app_storage.module_store import ModuleStore
 from ui.import_dialog import ImportDialog
 from ui.context_menu import ContextMenu
+from ui.tag_manager import TagManager
 from ui.components.tag_dialog import TagDialog
 from ui.components.tag_colors import TAG_PALETTE
 from ui.components.dialogs import ConfirmDialog, RenameDialog
@@ -23,6 +24,7 @@ class ModuleDetail(ft.Container):
         self._list_view = False
         self._sort_asc = True
         self._active_tag_filter: str | None = None  # currently selected tag filter
+        self._tag_manager: TagManager | None = None
 
         #  Title: text display + inline editor 
         self.title_text = ft.Text(
@@ -158,61 +160,29 @@ class ModuleDetail(ft.Container):
     def did_mount(self):
         self._import_dialog.attach_to_page(self.page)
 
-        self._tag_dialog = TagDialog(
-            store=self._store,
-            on_changed=self._reload_current_module,
-        )
-        self.page.overlay.append(self._tag_dialog)
-
         self._ctx_menu = ContextMenu()
         self.page.overlay.append(self._ctx_menu)
 
-        # Tag rename dialog
-        self._tag_rename_field = ft.TextField(label="New tag name", expand=True)
-        self._tag_rename_old: str | None = None
-        self._tag_rename_dialog = ft.AlertDialog(
-            modal=True,
-            title=ft.Text("Rename tag"),
-            content=ft.Container(width=360, content=self._tag_rename_field),
-            actions=[
-                ft.TextButton("Cancel", on_click=lambda e: self._close_dialog(self._tag_rename_dialog)),
-                ft.FilledButton("Rename", on_click=self._commit_tag_rename),
-            ],
-            actions_alignment=ft.MainAxisAlignment.END,
+        self._tag_manager = TagManager(
+            page=self.page,
+            store=self._store,
+            on_changed=self._reload_current_module,
         )
 
-        # Tag color picker dialog
-        self._tag_color_target: str | None = None  # tag name being recolored
-        self._tag_color_dialog = ft.AlertDialog(
-            modal=True,
-            title=ft.Text("Change tag color"),
-            content=ft.Container(
-                width=320,
-                content=ft.Column(
-                    tight=True,
-                    spacing=10,
-                    controls=[self._build_color_grid()],
-                ),
-            ),
-            actions=[
-                ft.TextButton("Cancel", on_click=lambda e: self._close_dialog(self._tag_color_dialog)),
-            ],
-            actions_alignment=ft.MainAxisAlignment.END,
-        )
-
-        self.page.overlay.extend([self._tag_rename_dialog, self._tag_color_dialog])
         self.page.update()
+
     def will_unmount(self):
         page = self.page
         if page is None:
             return
+
+        if self._tag_manager:
+            self._tag_manager.cleanup()
+
         for item in [
             self._import_dialog,
             self._import_dialog._file_picker,
-            self._tag_dialog,
             self._ctx_menu,
-            self._tag_rename_dialog,
-            self._tag_color_dialog,
         ]:
             if item in page.overlay:
                 page.overlay.remove(item)
@@ -418,107 +388,19 @@ class ModuleDetail(ft.Container):
     #  tag filter context menu 
 
     def _show_tag_menu(self, e: ft.TapEvent, tag_id: str):
-        # look up display name for dialog titles
-        tag_dict = self._store.get_tag_by_id(tag_id) or {}
-        tag_name = tag_dict.get("name", tag_id)
-        self._ctx_menu.show(
-            e.global_position.x,
-            e.global_position.y,
-            [
-                ("Change Color", ft.Icons.PALETTE_OUTLINED, ft.Colors.WHITE,
-                 lambda tid=tag_id: self._tag_change_color(tid)),
-                ("Rename", ft.Icons.DRIVE_FILE_RENAME_OUTLINE, ft.Colors.WHITE,
-                 lambda tid=tag_id, n=tag_name: self._tag_rename(tid, n)),
-                ("Delete", ft.Icons.DELETE_OUTLINE, ft.Colors.RED_400,
-                 lambda tid=tag_id, n=tag_name: self._tag_delete(tid, n)),
-            ],
-        )
-
-    def _build_color_grid(self) -> ft.Row:
-        return ft.Row(
-            wrap=True,
-            spacing=8,
-            run_spacing=8,
-            controls=[
-                ft.Container(
-                    width=30,
-                    height=30,
-                    border_radius=6,
-                    bgcolor=hex_color,
-                    tooltip=label,
-                    ink=True,
-                    on_click=lambda e, c=hex_color: self._commit_tag_color(c),
-                )
-                for hex_color, label in TAG_PALETTE
-            ],
-        )
-
+        self._tag_manager.show_menu(e, tag_id)
     def _tag_change_color(self, tag_id: str):
-        tag_dict = self._store.get_tag_by_id(tag_id) or {}
-        tag_name = tag_dict.get("name", tag_id)
-        self._tag_color_target = tag_id
-        self._tag_color_dialog.title = ft.Text(f'Color for "{tag_name}"')
-        self._tag_color_dialog.open = True
-        self._tag_color_dialog.update()
-
+        self._tag_manager._start_change_color(tag_id)
     def _commit_tag_color(self, hex_color: str):
-        self._close_dialog(self._tag_color_dialog)
-        if not self._tag_color_target:
-            return
-        try:
-            self._store.set_tag_color(self._tag_color_target, hex_color)
-        except Exception as ex:
-            print(f"Color change failed: {ex}")
-        self._reload_current_module()
-
+        self._tag_manager._commit_tag_color(hex_color)
     def _tag_rename(self, tag_id: str, current_name: str):
-        self._tag_rename_old = tag_id   # store ID, not name
-        self._tag_rename_field.value = current_name
-        self._tag_rename_field.error_text = ""
-        self._tag_rename_dialog.open = True
-        self._tag_rename_dialog.update()
-
+        self._tag_manager._start_rename(tag_id, current_name)
     def _commit_tag_rename(self, e):
-        new_name = (self._tag_rename_field.value or "").strip()
-        if not new_name:
-            self._tag_rename_field.error_text = "Name cannot be empty."
-            self._tag_rename_dialog.update()
-            return
-        existing = self._store.load_tag_names()
-        # get current name for the tag being renamed
-        current_tag = self._store.get_tag_by_id(self._tag_rename_old) or {}
-        current_name = current_tag.get("name", "")
-        if new_name in existing and new_name != current_name:
-            self._tag_rename_field.error_text = f'"{new_name}" already exists.'
-            self._tag_rename_dialog.update()
-            return
-        self._close_dialog(self._tag_rename_dialog)
-        try:
-            self._store.rename_global_tag(self._tag_rename_old, new_name)
-        except Exception as ex:
-            print(f"Tag rename failed: {ex}")
-        # _active_tag_filter uses IDs now, so no update needed on rename
-        self._reload_current_module()
-
+        self._tag_manager._commit_tag_rename(e)
     def _tag_delete(self, tag_id: str, tag_name: str):
-        def on_confirm():
-            self._apply_tag_delete(tag_id)
-
-        dlg = ConfirmDialog(
-            "Delete tag",
-            f'Delete tag "{tag_name}"? It will be removed from all documents.',
-            on_confirm
-        )
-        self.page.overlay.append(dlg)
-        self.page.update()
-        dlg.open = True
-        dlg.update()
-
+        self._tag_manager._start_delete(tag_id, tag_name)
     def _apply_tag_delete(self, tag_id: str):
-        try:
-            self._store.remove_global_tag(tag_id)
-        except Exception as ex:
-            print(f"Tag delete failed: {ex}")
+        self._tag_manager.store.remove_global_tag(tag_id)
         if self._active_tag_filter == tag_id:
             self._active_tag_filter = None
         self._reload_current_module()
@@ -703,7 +585,7 @@ class ModuleDetail(ft.Container):
         )
 
     def _doc_manage_tags(self, doc):
-        self._tag_dialog.open_for_document(doc, self.module)
+        self._tag_manager.tag_dialog.open_for_document(doc, self.module)
 
     #  document dialog helpers 
 
