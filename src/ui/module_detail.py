@@ -6,6 +6,7 @@ from ui.import_dialog import ImportDialog
 from ui.context_menu import ContextMenu
 from ui.components.tag_dialog import TagDialog
 from ui.components.tag_colors import TAG_PALETTE
+from ui.components.dialogs import ConfirmDialog, RenameDialog
 from pathlib import Path
 import subprocess
 import sys
@@ -151,51 +152,20 @@ class ModuleDetail(ft.Container):
 
     #  lifecycle 
 
+    def show_error(self, message: str):
+        self.page.show_snack_bar(ft.SnackBar(content=ft.Text(message)))
+
     def did_mount(self):
         self._import_dialog.attach_to_page(self.page)
 
-        # Tag dialog
         self._tag_dialog = TagDialog(
             store=self._store,
             on_changed=self._reload_current_module,
         )
         self.page.overlay.append(self._tag_dialog)
 
-        # Floating context menu for documents
         self._ctx_menu = ContextMenu()
         self.page.overlay.append(self._ctx_menu)
-
-        # Document rename dialog
-        self._rename_field = ft.TextField(label="New name", expand=True)
-        self._rename_confirm_cb = None
-        self._rename_dialog = ft.AlertDialog(
-            modal=True,
-            title=ft.Text("Rename document"),
-            content=ft.Container(width=360, content=self._rename_field),
-            actions=[
-                ft.TextButton("Cancel", on_click=lambda e: self._close_dialog(self._rename_dialog)),
-                ft.FilledButton("Rename", on_click=self._commit_rename),
-            ],
-            actions_alignment=ft.MainAxisAlignment.END,
-        )
-
-        # Document delete confirm dialog
-        self._delete_label = ft.Text("")
-        self._delete_confirm_cb = None
-        self._delete_dialog = ft.AlertDialog(
-            modal=True,
-            title=ft.Text("Delete document"),
-            content=self._delete_label,
-            actions=[
-                ft.TextButton("Cancel", on_click=lambda e: self._close_dialog(self._delete_dialog)),
-                ft.FilledButton(
-                    "Delete",
-                    style=ft.ButtonStyle(bgcolor=ft.Colors.RED_700),
-                    on_click=self._commit_delete,
-                ),
-            ],
-            actions_alignment=ft.MainAxisAlignment.END,
-        )
 
         # Tag rename dialog
         self._tag_rename_field = ft.TextField(label="New tag name", expand=True)
@@ -230,12 +200,8 @@ class ModuleDetail(ft.Container):
             actions_alignment=ft.MainAxisAlignment.END,
         )
 
-        # Add dialogs to page
-        for dlg in (self._rename_dialog, self._delete_dialog,
-                    self._tag_rename_dialog, self._tag_color_dialog):
-            self.page.overlay.append(dlg)
+        self.page.overlay.extend([self._tag_rename_dialog, self._tag_color_dialog])
         self.page.update()
-
     def will_unmount(self):
         page = self.page
         if page is None:
@@ -245,24 +211,11 @@ class ModuleDetail(ft.Container):
             self._import_dialog._file_picker,
             self._tag_dialog,
             self._ctx_menu,
-            self._rename_dialog,
-            self._delete_dialog,
             self._tag_rename_dialog,
             self._tag_color_dialog,
         ]:
             if item in page.overlay:
                 page.overlay.remove(item)
-
-
-
-
-
-
-
-
-
-
-
 
     #  public 
 
@@ -310,10 +263,6 @@ class ModuleDetail(ft.Container):
         self.title_text.value = value
         self._title_click.visible = True
         self.title_field.visible = False
-
-
-
-
 
     #  inline DESCRIPTION editing 
 
@@ -552,12 +501,18 @@ class ModuleDetail(ft.Container):
         self._reload_current_module()
 
     def _tag_delete(self, tag_id: str, tag_name: str):
-        self._delete_label.value = (
-            f'Delete tag "{tag_name}"? It will be removed from all documents.'
+        def on_confirm():
+            self._apply_tag_delete(tag_id)
+
+        dlg = ConfirmDialog(
+            "Delete tag",
+            f'Delete tag "{tag_name}"? It will be removed from all documents.',
+            on_confirm
         )
-        self._delete_confirm_cb = lambda tid=tag_id: self._apply_tag_delete(tid)
-        self._delete_dialog.open = True
-        self._delete_dialog.update()
+        self.page.overlay.append(dlg)
+        self.page.update()
+        dlg.open = True
+        dlg.update()
 
     def _apply_tag_delete(self, tag_id: str):
         try:
@@ -757,48 +712,38 @@ class ModuleDetail(ft.Container):
         dlg.update()
 
     def _doc_rename(self, doc):
-        self._rename_field.value = doc.title
-        self._rename_field.error_text = ""
-        self._rename_confirm_cb = lambda new_name, d=doc: self._apply_doc_rename(d, new_name)
-        self._rename_dialog.open = True
-        self._rename_dialog.update()
+        def on_rename(new_name):
+            try:
+                self._store.rename_document(doc, new_name)
+                self._reload_current_module()
+            except Exception as e:
+                self.show_error(f"Rename failed: {e}")
 
-    def _commit_rename(self, e):
-        new_name = (self._rename_field.value or "").strip()
-        if not new_name:
-            self._rename_field.error_text = "Name cannot be empty."
-            self._rename_dialog.update()
-            return
-        self._close_dialog(self._rename_dialog)
-        if self._rename_confirm_cb:
-            self._rename_confirm_cb(new_name)
-
-    def _apply_doc_rename(self, doc, new_name: str):
-        try:
-            self._store.rename_document(doc, new_name)
-        except Exception as ex:
-            print(f"Rename failed: {ex}")
-        self._reload_current_module()
+        dlg = RenameDialog("Rename document", on_rename, initial_value=doc.title)
+        self.page.overlay.append(dlg)
+        self.page.update()
+        dlg.open = True
+        dlg.update()
 
     def _doc_delete(self, doc):
-        self._delete_label.value = f'Delete "{doc.title}"? This cannot be undone.'
-        self._delete_confirm_cb = lambda d=doc: self._apply_doc_delete(d)
-        self._delete_dialog.open = True
-        self._delete_dialog.update()
+        def on_confirm():
+            try:
+                self._store.delete_document(self.module, doc)
+                self._reload_current_module()
+            except Exception as e:
+                self.show_error(f"Delete failed: {e}")
 
-    def _commit_delete(self, e):
-        self._close_dialog(self._delete_dialog)
-        if self._delete_confirm_cb:
-            self._delete_confirm_cb()
+        dlg = ConfirmDialog(
+            "Delete document",
+            f'Delete "{doc.title}"? This cannot be undone.',
+            on_confirm
+        )
+        self.page.overlay.append(dlg)
+        self.page.update()
+        dlg.open = True
+        dlg.update()
 
-    def _apply_doc_delete(self, doc):
-        try:
-            self._store.delete_document(self.module, doc)
-        except Exception as ex:
-            print(f"Delete failed: {ex}")
-        self._reload_current_module()
-
-    #  file opener 
+    #  file opener
 
     def _open_file(self, filepath: str):
         try:
