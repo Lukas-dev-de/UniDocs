@@ -222,25 +222,25 @@ class ModuleStore:
         """Add a new tag to the global registry. Returns the new tag dict."""
         import uuid
         with self._cache_lock:
-        tags = self.load_all_tags()
-        # prevent duplicate names
+            tags = self.load_all_tags()
+            # prevent duplicate names
             for t in tags:
                 if t["name"] == name:
                     return t
-        new_tag = {"id": str(uuid.uuid4()), "name": name, "color": color or DEFAULT_TAG_COLOR}
-        tags.append(new_tag)
-        self._write_global_tags(tags)
-        return new_tag
+            new_tag = {"id": str(uuid.uuid4()), "name": name, "color": color or DEFAULT_TAG_COLOR}
+            tags.append(new_tag)
+            self._write_global_tags(tags)
+            return new_tag
 
     def set_tag_color(self, tag_id: str, color: str) -> None:
         """Update the color for a tag (identified by ID)."""
         with self._cache_lock:
-        tags = self.load_all_tags()
-        for t in tags:
-            if t["id"] == tag_id:
-                t["color"] = color
-                break
-        self._write_global_tags(tags)
+            tags = self.load_all_tags()
+            for t in tags:
+                if t["id"] == tag_id:
+                    t["color"] = color
+                    break
+            self._write_global_tags(tags)
 
     def rename_global_tag(self, tag_id: str, new_name: str) -> None:
         """
@@ -248,23 +248,23 @@ class ModuleStore:
         Because .doc_tags stores IDs, no per-module migration is needed.
         """
         with self._cache_lock:
-        tags = self.load_all_tags()
-        existing_names = [t["name"] for t in tags if t["id"] != tag_id]
-        if new_name in existing_names:
-            return  # name collision
-        for t in tags:
-            if t["id"] == tag_id:
-                t["name"] = new_name
-                break
-        self._write_global_tags(tags)
+            tags = self.load_all_tags()
+            existing_names = [t["name"] for t in tags if t["id"] != tag_id]
+            if new_name in existing_names:
+                return  # name collision
+            for t in tags:
+                if t["id"] == tag_id:
+                    t["name"] = new_name
+                    break
+            self._write_global_tags(tags)
 
     def remove_global_tag(self, tag_id: str) -> None:
         """
         Remove a tag from the global registry and strip it from all .doc_tags files.
         """
         with self._cache_lock:
-        tags = [t for t in self.load_all_tags() if t["id"] != tag_id]
-        self._write_global_tags(tags)
+            tags = [t for t in self.load_all_tags() if t["id"] != tag_id]
+            self._write_global_tags(tags)
 
         # strip from every module's .doc_tags
         for folder in self.root.iterdir():
@@ -382,16 +382,16 @@ class ModuleStore:
         except (FileNotFoundError, json.JSONDecodeError):
             return {}
 
-    def _write_doc_tags(self, folder: Path, data: dict) -> None:
-        (folder / DOC_TAGS_FILENAME).write_text(
-            json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
-        )
+        def _write_doc_tags(self, folder: Path, data: dict) -> None:
+            (folder / DOC_TAGS_FILENAME).write_text(
+                json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
 
     def _write_global_tags(self, tags: list[dict]) -> None:
         with self._cache_lock:
-        (self.root / GLOBAL_TAGS_FILENAME).write_text(
-            json.dumps(tags, ensure_ascii=False, indent=2), encoding="utf-8"
-        )
+            (self.root / GLOBAL_TAGS_FILENAME).write_text(
+                json.dumps(tags, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
             self._tags_cache = tags
 
 
