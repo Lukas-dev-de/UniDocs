@@ -28,9 +28,11 @@ class TagDialog(ft.AlertDialog):
         self._store = store
         self._on_changed = on_changed
 
-        self._doc: Document | None = None
+        self._docs: list[Document] = []
         self._module: Module | None = None
-        self._selected_ids: set[str] = set()   # set of tag IDs
+        # tag_id -> True (applied to all docs) / False (removed from all) /
+        # None (partial: present on some docs, left untouched on save)
+        self._desired: dict[str, bool | None] = {}
         self._new_tag_color: str = DEFAULT_TAG_COLOR
 
         # existing tags chips
@@ -72,11 +74,12 @@ class TagDialog(ft.AlertDialog):
 
         # layout
         self.modal = True
+        self._title_text = ft.Text("Manage Tags", size=18, weight=ft.FontWeight.BOLD)
         self.title = ft.Row(
             spacing=8,
             controls=[
                 ft.Icon(ft.Icons.LABEL_OUTLINE, size=20),
-                ft.Text("Manage Tags", size=18, weight=ft.FontWeight.BOLD),
+                self._title_text,
             ],
         )
         self.content = ft.Container(
@@ -86,7 +89,7 @@ class TagDialog(ft.AlertDialog):
                 spacing=16,
                 controls=[
                     ft.Text(
-                        "Toggle tags for this document. Create new global tags below.",
+                        "Toggle tags for the selected document(s). Create new global tags below.",
                         size=13,
                         color=ft.Colors.WHITE_70,
                     ),
@@ -119,15 +122,34 @@ class TagDialog(ft.AlertDialog):
     # -- public --------------------------------------------------------------
 
     def open_for_document(self, doc: Document, module: Module):
-        self._doc = doc
+        self.open_for_documents([doc], module)
+
+    def open_for_documents(self, docs: list[Document], module: Module):
+        """Open the dialog for one or many documents (batch tagging)."""
+        docs = list(docs)
+        self._docs = docs
         self._module = module
-        # seed selection from doc's current tag IDs
-        self._selected_ids = {t.id for t in doc.tags}
+
+        # For each global tag: on all docs -> True, on none -> False, on some -> None
+        tag_ids_per_doc = [{t.id for t in d.tags} for d in docs]
+        self._desired = {}
+        for tag in self._store.load_all_tags():
+            tid = tag["id"]
+            present = sum(1 for ids in tag_ids_per_doc if tid in ids)
+            if present == len(docs):
+                self._desired[tid] = True
+            elif present == 0:
+                self._desired[tid] = False
+            else:
+                self._desired[tid] = None
+
         self._status.value = ""
         self._new_tag_field.value = ""
         self._new_tag_color = DEFAULT_TAG_COLOR
         self._color_swatch.bgcolor = DEFAULT_TAG_COLOR
         self._color_picker_container.visible = False
+        n = len(docs)
+        self._title_text.value = "Manage Tags" if n == 1 else f"Manage Tags ({n} documents)"
         self._rebuild_chips()
         self.open = True
         self.update()
@@ -168,17 +190,27 @@ class TagDialog(ft.AlertDialog):
             )
         else:
             for tag in sorted(all_tags, key=lambda t: t["name"]):
-                selected = tag["id"] in self._selected_ids
+                state = self._desired.get(tag["id"], False)
                 self._chips_row.controls.append(
-                    self._build_chip(tag["id"], tag["name"], tag["color"], selected)
+                    self._build_chip(tag["id"], tag["name"], tag["color"], state)
                 )
 
-    def _build_chip(self, tag_id: str, tag_name: str, color: str, selected: bool) -> ft.Container:
+    def _build_chip(self, tag_id: str, tag_name: str, color: str, state: bool | None) -> ft.Container:
+        # state: True = on all docs, False = on none, None = on some (partial)
+        if state is True:
+            bgcolor = color
+            border = None
+        elif state is None:
+            bgcolor = ft.Colors.GREY_800
+            border = ft.Border.all(2, color)
+        else:
+            bgcolor = ft.Colors.GREY_800
+            border = ft.Border.all(2, ft.Colors.OUTLINE_VARIANT)
         return ft.Container(
             key=tag_id,
-            bgcolor=color if selected else ft.Colors.GREY_800,
+            bgcolor=bgcolor,
             border_radius=20,
-            border=ft.Border.all(2, color) if not selected else None,
+            border=border,
             padding=ft.Padding.symmetric(horizontal=12, vertical=6),
             on_click=lambda e, tid=tag_id: self._toggle_tag(tid),
             ink=True,
@@ -187,24 +219,22 @@ class TagDialog(ft.AlertDialog):
                 tight=True,
                 controls=[
                     ft.Icon(
-                        ft.Icons.LABEL if selected else ft.Icons.LABEL_OUTLINE,
+                        ft.Icons.LABEL if state is True else ft.Icons.LABEL_OUTLINE,
                         size=14,
-                        color=ft.Colors.WHITE if selected else color,
+                        color=ft.Colors.WHITE if state is True else color,
                     ),
                     ft.Text(
                         tag_name,
                         size=13,
-                        color=ft.Colors.WHITE if selected else ft.Colors.WHITE_70,
+                        color=ft.Colors.WHITE if state is True else ft.Colors.WHITE_70,
                     ),
                 ],
             ),
         )
 
     def _toggle_tag(self, tag_id: str):
-        if tag_id in self._selected_ids:
-            self._selected_ids.discard(tag_id)
-        else:
-            self._selected_ids.add(tag_id)
+        # Checked -> uncheck (remove from all); unchecked/partial -> check (apply to all)
+        self._desired[tag_id] = False if self._desired.get(tag_id) is True else True
         self._rebuild_chips()
         self.update()
 
@@ -218,8 +248,8 @@ class TagDialog(ft.AlertDialog):
             self.update()
             return
         new_tag = self._store.add_global_tag(name, self._new_tag_color)
-        # auto-select the freshly created tag
-        self._selected_ids.add(new_tag["id"])
+        # auto-apply the freshly created tag to all selected documents
+        self._desired[new_tag["id"]] = True
         self._new_tag_field.value = ""
         self._new_tag_color = DEFAULT_TAG_COLOR
         self._color_swatch.bgcolor = DEFAULT_TAG_COLOR
@@ -229,18 +259,28 @@ class TagDialog(ft.AlertDialog):
         self.update()
 
     def _save(self, e):
-        if self._doc is None or self._module is None:
+        if not self._docs or self._module is None:
             return
-        # persist IDs to .doc_tags
-        self._store.save_doc_tags(self._module, self._doc, list(self._selected_ids))
-        # update the in-memory doc so the UI reflects changes immediately
-        tag_map = {t["id"]: t for t in self._store.load_all_tags()}
+        all_tags = self._store.load_all_tags()
+        tag_map = {t["id"]: t for t in all_tags}
+        order = [t["id"] for t in all_tags]
         from models.tag import Tag
-        self._doc.tags = [
-            Tag(tid, tag_map[tid]["name"], tag_map[tid]["color"])
-            for tid in self._selected_ids
-            if tid in tag_map
-        ]
+
+        for doc in self._docs:
+            current = {t.id for t in doc.tags}
+            for tid, state in self._desired.items():
+                if state is True:
+                    current.add(tid)
+                elif state is False:
+                    current.discard(tid)
+                # None (partial) -> leave this doc unchanged
+            new_ids = [tid for tid in order if tid in current]
+            self._store.save_doc_tags(self._module, doc, new_ids)
+            doc.tags = [
+                Tag(tid, tag_map[tid]["name"], tag_map[tid]["color"])
+                for tid in new_ids
+            ]
+
         self.open = False
         self.update()
         if self._on_changed:

@@ -26,6 +26,16 @@ class ModuleDetail(ft.Container):
         self._active_tag_filter: str | None = None  # currently selected tag filter
         self._tag_manager: TagManager | None = None
 
+        #  Selection state 
+        self._selected: set[str] = set()          # filepaths of selected documents
+        self._select_mode: bool = False           # explicit "select" toggle
+        self._anchor_path: str | None = None      # anchor for shift-range selection
+        self._visible_paths: list[str] = []       # display order of current docs
+        # modifier keys, tracked via page.on_keyboard_event
+        self._mod_ctrl: bool = False
+        self._mod_shift: bool = False
+        self._mod_meta: bool = False
+
         #  Title: text display + inline editor 
         self.title_text = ft.Text(
             value="No Module Selected",
@@ -85,6 +95,11 @@ class ModuleDetail(ft.Container):
             bgcolor=ft.Colors.BLUE_700,
             mini=True,
         )
+        self._select_btn = ft.IconButton(
+            icon=ft.Icons.CHECK_CIRCLE_OUTLINE,
+            tooltip="Select documents",
+            on_click=self._toggle_select_mode,
+        )
 
         #  Tag filter bar 
         self._tag_filter_row = ft.Row(
@@ -114,6 +129,41 @@ class ModuleDetail(ft.Container):
             visible=False,
         )
 
+        #  Selection action bar (visible while selecting) 
+        self._sel_count_text = ft.Text("", size=14, weight=ft.FontWeight.BOLD)
+        self._sel_open_btn = ft.TextButton(
+            "Open", icon=ft.Icons.OPEN_IN_NEW, on_click=self._batch_open,
+        )
+        self._sel_tag_btn = ft.TextButton(
+            "Tags", icon=ft.Icons.LABEL_OUTLINE, on_click=self._batch_tag,
+        )
+        self._sel_delete_btn = ft.TextButton(
+            "Delete", icon=ft.Icons.DELETE_OUTLINE, on_click=self._batch_delete,
+            style=ft.ButtonStyle(color=ft.Colors.RED_400),
+        )
+        self._sel_done_btn = ft.TextButton(
+            "Done", icon=ft.Icons.CLOSE, on_click=self._exit_select_mode,
+        )
+        self._selection_bar = ft.Container(
+            visible=False,
+            bgcolor=ft.Colors.BLUE_GREY_800,
+            border_radius=10,
+            padding=ft.Padding.symmetric(horizontal=12, vertical=6),
+            content=ft.Row(
+                spacing=4,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                controls=[
+                    ft.Icon(ft.Icons.CHECK_CIRCLE_OUTLINE, size=18, color=ft.Colors.BLUE_300),
+                    self._sel_count_text,
+                    ft.Container(expand=True),
+                    self._sel_open_btn,
+                    self._sel_tag_btn,
+                    self._sel_delete_btn,
+                    self._sel_done_btn,
+                ],
+            ),
+        )
+
         #  Styling 
         self.border_radius = 16
         self.padding = 16
@@ -141,12 +191,13 @@ class ModuleDetail(ft.Container):
                         ),
                         ft.Row(
                             spacing=4,
-                            controls=[self._sort_toggle, self._view_toggle, self._import_btn],
+                            controls=[self._select_btn, self._sort_toggle, self._view_toggle, self._import_btn],
                         ),
                     ],
                 ),
                 ft.Divider(color=ft.Colors.WHITE_24),
                 self._tag_filter_row,
+                self._selection_bar,
                 self.documents_grid,
                 self.documents_list,
             ],
@@ -169,6 +220,12 @@ class ModuleDetail(ft.Container):
             on_changed=self._reload_current_module,
         )
 
+        # modifer keys aren't reported on tap events, so track them globally
+        try:
+            self.page.on_keyboard_event = self._on_key_event
+        except Exception as ex:
+            print(f"Keyboard events unavailable: {ex}")
+
         self.page.update()
 
     def will_unmount(self):
@@ -187,6 +244,11 @@ class ModuleDetail(ft.Container):
             if item in page.overlay:
                 page.overlay.remove(item)
 
+        try:
+            page.on_keyboard_event = None
+        except Exception:
+            pass
+
     #  public 
 
     def set_module(self, module: Module):
@@ -199,6 +261,9 @@ class ModuleDetail(ft.Container):
                 break
         self.module = fresh if fresh is not None else module
         self._active_tag_filter = None
+        self._select_mode = False
+        self._selected.clear()
+        self._anchor_path = None
         self._show_title_text(self.module.title)
         self._show_desc_text(self.module.description)
         self._refresh_documents()
@@ -340,6 +405,7 @@ class ModuleDetail(ft.Container):
     def _refresh_documents(self):
         if self.module is None:
             self._tag_filter_row.visible = False
+            self._selection_bar.visible = False
             self.documents_grid.controls.clear()
             self.documents_list.controls.clear()
             return
@@ -363,6 +429,14 @@ class ModuleDetail(ft.Container):
 
         # --- get data and render ---
         docs = self._get_filtered_and_sorted_docs()
+        self._visible_paths = [d.filepath for d in docs]
+
+        # Keep selection consistent with what is currently visible (e.g. when
+        # a tag filter hides docs, they should no longer stay selected).
+        if self._selected:
+            self._selected &= set(self._visible_paths)
+            if self._anchor_path not in self._selected:
+                self._anchor_path = None
 
         if self._list_view:
             self.documents_grid.visible = False
@@ -372,6 +446,8 @@ class ModuleDetail(ft.Container):
             self.documents_grid.visible = True
             self.documents_list.visible = False
             self._render_grid(docs)
+
+        self._update_selection_bar()
 
     def _filter_chip(self, label: str, tag_id, selected: bool, color: str = "#1565C0") -> ft.Control:
         chip_content = ft.Container(
@@ -399,6 +475,141 @@ class ModuleDetail(ft.Container):
         self._active_tag_filter = tag_name
         self._refresh_documents()
         self.update()
+
+    #  selection 
+
+    def _is_selecting(self) -> bool:
+        return self._select_mode or bool(self._selected)
+
+    def _toggle_select_mode(self, e=None):
+        if self._is_selecting():
+            self._select_mode = False
+            self._selected.clear()
+            self._anchor_path = None
+        else:
+            self._select_mode = True
+        self._refresh_documents()
+        self.update()
+
+    def _exit_select_mode(self, e=None):
+        self._select_mode = False
+        self._selected.clear()
+        self._anchor_path = None
+        self._refresh_documents()
+        self.update()
+
+    def _select_doc(self, doc: Document, range_: bool = False):
+        path = doc.filepath
+        anchor_valid = (
+            range_
+            and self._anchor_path in self._visible_paths
+            and path in self._visible_paths
+        )
+        if anchor_valid:
+            a = self._visible_paths.index(self._anchor_path)
+            b = self._visible_paths.index(path)
+            lo, hi = sorted((a, b))
+            self._selected = set(self._visible_paths[lo:hi + 1])
+        else:
+            if path in self._selected:
+                self._selected.discard(path)
+                if self._anchor_path == path:
+                    self._anchor_path = None
+            else:
+                self._selected.add(path)
+                self._anchor_path = path
+        self._refresh_documents()
+        self.update()
+
+    def _on_doc_click(self, e, doc: Document):
+        # Ctrl/Cmd/Shift or an active selection => select instead of opening.
+        if self._is_selecting() or self._mod_ctrl or self._mod_meta or self._mod_shift:
+            self._select_doc(doc, range_=self._mod_shift)
+        else:
+            self._open_file(doc.filepath)
+
+    def _on_doc_long_press(self, e, doc: Document):
+        # Touch friendly: long press starts a selection including this doc.
+        if doc.filepath not in self._selected:
+            self._selected.add(doc.filepath)
+        self._anchor_path = doc.filepath
+        self._select_mode = True
+        self._refresh_documents()
+        self.update()
+
+    def _on_key_event(self, e):
+        self._mod_ctrl = bool(getattr(e, "ctrl", False))
+        self._mod_shift = bool(getattr(e, "shift", False))
+        self._mod_meta = bool(getattr(e, "meta", False))
+        key = getattr(e, "key", "") or ""
+        if key in ("Escape", "Esc") and self._is_selecting():
+            self._exit_select_mode()
+
+    def _selected_docs(self) -> list[Document]:
+        if self.module is None:
+            return []
+        return [d for d in self.module.documents if d.filepath in self._selected]
+
+    def _update_selection_bar(self):
+        active = self._is_selecting()
+        count = len(self._selected)
+        self._selection_bar.visible = active
+        self._sel_count_text.value = f"{count} selected" if count else "Selection mode"
+        has_docs = count > 0
+        self._sel_open_btn.disabled = not has_docs
+        self._sel_tag_btn.disabled = not has_docs
+        self._sel_delete_btn.disabled = not has_docs
+        self._select_btn.icon = ft.Icons.CLOSE if active else ft.Icons.CHECK_CIRCLE_OUTLINE
+        self._select_btn.tooltip = "Exit selection" if active else "Select documents"
+        self._select_btn.icon_color = ft.Colors.BLUE_300 if active else None
+
+    def _sel_badge(self) -> ft.Control:
+        return ft.Container(
+            width=22,
+            height=22,
+            border_radius=11,
+            bgcolor=ft.Colors.BLUE_400,
+            border=ft.Border.all(2, ft.Colors.BLUE_GREY_700),
+            content=ft.Icon(ft.Icons.CHECK, size=14, color=ft.Colors.WHITE),
+        )
+
+    #  batch actions 
+
+    def _batch_open(self, e):
+        for doc in self._selected_docs():
+            self._open_file(doc.filepath)
+
+    def _batch_tag(self, e):
+        docs = self._selected_docs()
+        if not docs:
+            return
+        self._tag_manager.tag_dialog.open_for_documents(docs, self.module)
+
+    def _batch_delete(self, e):
+        docs = self._selected_docs()
+        if not docs:
+            return
+
+        def on_confirm():
+            try:
+                for doc in list(docs):
+                    self._store.delete_document(self.module, doc)
+            except Exception as ex:
+                self.show_error(f"Delete failed: {ex}")
+            self._select_mode = False
+            self._selected.clear()
+            self._anchor_path = None
+            self._reload_current_module()
+
+        dlg = ConfirmDialog(
+            "Delete documents",
+            f"Delete {len(docs)} documents? This cannot be undone.",
+            on_confirm,
+        )
+        self.page.overlay.append(dlg)
+        self.page.update()
+        dlg.open = True
+        dlg.update()
 
     #  tag filter context menu 
 
@@ -464,13 +675,15 @@ class ModuleDetail(ft.Container):
                 for t in doc.tags
             ],
         )
+        selected = doc.filepath in self._selected
         inner = ft.Container(
             border_radius=10,
-            bgcolor=ft.Colors.GREY_800,
+            bgcolor=ft.Colors.BLUE_GREY_700 if selected else ft.Colors.GREY_800,
+            border=ft.Border.all(2, ft.Colors.BLUE_300) if selected else None,
             padding=10,
             ink=True,
-            on_click=lambda e, path=doc.filepath: self._open_file(path),
-            tooltip="Click to open · Right-click for options",
+            on_click=lambda e, d=doc: self._on_doc_click(e, d),
+            tooltip="Open · Ctrl+Click to select · Right-click for options",
             content=ft.Column(
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                 alignment=ft.MainAxisAlignment.CENTER,
@@ -493,13 +706,28 @@ class ModuleDetail(ft.Container):
                 ],
             ),
         )
+        tile: ft.Control = (
+            ft.Stack(
+                controls=[
+                    inner,
+                    ft.Container(
+                        content=self._sel_badge(),
+                        alignment=ft.Alignment.TOP_RIGHT,
+                        margin=ft.margin.only(top=6, right=6),
+                    ),
+                ]
+            )
+            if selected
+            else inner
+        )
         return ft.GestureDetector(
             content=ft.DragTarget(
-                content=inner,
+                content=tile,
                 on_will_accept=lambda e : True,
                 on_accept=lambda e : self._on_doc_accept_tag(e, doc=doc)
             ),
             on_secondary_tap_down=lambda e, d=doc: self._show_doc_menu(e, d),
+            on_long_press=lambda e, d=doc: self._on_doc_long_press(e, d),
         )
 
     def _doc_row(self, doc):
@@ -520,13 +748,15 @@ class ModuleDetail(ft.Container):
                 for t in doc.tags
             ],
         )
+        selected = doc.filepath in self._selected
         inner = ft.Container(
             border_radius=8,
-            bgcolor=ft.Colors.GREY_800,
+            bgcolor=ft.Colors.BLUE_GREY_700 if selected else ft.Colors.GREY_800,
+            border=ft.Border.all(2, ft.Colors.BLUE_300) if selected else None,
             padding=ft.Padding.symmetric(horizontal=12, vertical=8),
             ink=True,
-            on_click=lambda e, path=doc.filepath: self._open_file(path),
-            tooltip="Click to open · Right-click for options",
+            on_click=lambda e, d=doc: self._on_doc_click(e, d),
+            tooltip="Open · Ctrl+Click to select · Right-click for options",
             content=ft.Row(
                 spacing=12,
                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
@@ -549,15 +779,30 @@ class ModuleDetail(ft.Container):
                 ],
             ),
         )
+        tile: ft.Control = (
+            ft.Stack(
+                controls=[
+                    inner,
+                    ft.Container(
+                        content=self._sel_badge(),
+                        alignment=ft.Alignment.CENTER_LEFT,
+                        margin=ft.margin.only(left=12),
+                    ),
+                ]
+            )
+            if selected
+            else inner
+        )
         return ft.GestureDetector(
             content=ft.DragTarget(
-                content=inner,
+                content=tile,
                 on_will_accept=lambda e : True,
                 on_accept=lambda e : self._on_doc_accept_tag(e, doc=doc)
             ),
             on_secondary_tap_down=lambda e, d=doc: self._show_doc_menu(e, d),
+            on_long_press=lambda e, d=doc: self._on_doc_long_press(e, d),
         )
-    
+
 
     def _on_doc_accept_tag(self, e: ft.DragTargetEvent, doc : Document):
         tag_id: str = e.src.data
@@ -590,6 +835,10 @@ class ModuleDetail(ft.Container):
             e.global_position.x,
             e.global_position.y,
             [
+                ("Open", ft.Icons.OPEN_IN_NEW, ft.Colors.WHITE,
+                 lambda d=doc: self._open_file(d.filepath)),
+                ("Select", ft.Icons.CHECK_CIRCLE_OUTLINE, ft.Colors.WHITE,
+                 lambda d=doc: self._select_doc(d)),
                 ("Manage Tags", ft.Icons.LABEL_OUTLINE, ft.Colors.BLUE_200,
                  lambda d=doc: self._doc_manage_tags(d)),
                 ("Rename", ft.Icons.DRIVE_FILE_RENAME_OUTLINE, ft.Colors.WHITE,

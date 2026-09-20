@@ -382,10 +382,10 @@ class ModuleStore:
         except (FileNotFoundError, json.JSONDecodeError):
             return {}
 
-        def _write_doc_tags(self, folder: Path, data: dict) -> None:
-            (folder / DOC_TAGS_FILENAME).write_text(
-                json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
-            )
+    def _write_doc_tags(self, folder: Path, data: dict) -> None:
+        (folder / DOC_TAGS_FILENAME).write_text(
+            json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
 
     def _write_global_tags(self, tags: list[dict]) -> None:
         with self._cache_lock:
