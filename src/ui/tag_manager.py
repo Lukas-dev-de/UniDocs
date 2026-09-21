@@ -58,11 +58,11 @@ class TagManager:
             e.global_position.x,
             e.global_position.y,
             [
-                ("Change Color", ft.Icons.PALETTE_OUTLINED, ft.Colors.WHITE,
+                ("Change Color", ft.Icons.PALETTE_OUTLINED, ft.Colors.ON_SURFACE,
                  lambda tid=tag_id: self._start_change_color(tid)),
-                ("Rename", ft.Icons.DRIVE_FILE_RENAME_OUTLINE, ft.Colors.WHITE,
+                ("Rename", ft.Icons.DRIVE_FILE_RENAME_OUTLINE, ft.Colors.ON_SURFACE,
                  lambda tid=tag_id, n=tag_name: self._start_rename(tid, n)),
-                ("Delete", ft.Icons.DELETE_OUTLINE, ft.Colors.RED_400,
+                ("Delete", ft.Icons.DELETE_OUTLINE, ft.Colors.ERROR,
                  lambda tid=tag_id, n=tag_name: self._start_delete(tid, n)),
             ],
         )

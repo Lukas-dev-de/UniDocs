@@ -7,6 +7,8 @@ You can add tags to documents by rightclicking them and applying existing tags o
 
 You can sort by tags by clicking on them in the filterbar that appears when you have >0 Tags
 
+You can change the look of the app in the settings: choose one of 5 color palettes and switch between System, Light and Dark mode. The choice is applied instantly and remembered.
+
 Be aware, first start might take longer than usual ... I don't know why yet
 
 # Contributing:
@@ -28,7 +30,7 @@ Be aware, first start might take longer than usual ... I don't know why yet
 - [ ] feature: grouping modules in sidebar
 
 #### high effort
-- [ ] feature: implement custom themes 
+- [x] feature: implement custom themes 
 - [ ] feature: file syncing (for example via self-hosting, github or googledrive ...)
 
 

@@ -5,18 +5,20 @@ from ui.settings_dialog import SettingsDialog
 from ui.context_menu import ContextMenu
 from models.module import Module
 from app_storage.module_store import ModuleStore
+from ui.theme import ThemeManager
 
 
 @ft.control
 class ModuleSidebar(ft.Container):
     padding: int = 8
     border_radius: int = 16
-    bgcolor: ft.Colors = ft.Colors.GREY_900
+    bgcolor: ft.Colors = ft.Colors.SURFACE
 
-    def __init__(self, store: ModuleStore, on_module_select=None):
+    def __init__(self, store: ModuleStore, on_module_select=None, theme: ThemeManager | None = None):
         super().__init__()
         self._store = store
         self._on_module_select = on_module_select
+        self._theme = theme
 
         self.modules_list = ft.Column(scroll=ft.ScrollMode.AUTO, expand=True)
 
@@ -67,8 +69,8 @@ class ModuleSidebar(ft.Container):
     def did_mount(self):
         self._settings_dialog = SettingsDialog(
             store=self._store,
+            theme=self._theme,
             on_location_change=self._on_location_change,
-
         )
 
         self._ctx_menu = ContextMenu()
@@ -84,7 +86,10 @@ class ModuleSidebar(ft.Container):
                 ft.TextButton("Cancel", on_click=lambda e: self._close_dialog(self._delete_dialog)),
                 ft.FilledButton(
                     "Delete",
-                    style=ft.ButtonStyle(bgcolor=ft.Colors.RED_700),
+                    style=ft.ButtonStyle(
+                        bgcolor=ft.Colors.ERROR,
+                        color=ft.Colors.ON_ERROR,
+                    ),
                     on_click=self._commit_delete,
                 ),
             ],
@@ -106,8 +111,7 @@ class ModuleSidebar(ft.Container):
     #  settings 
 
     def _open_settings(self, e):
-        self._settings_dialog.open = True
-        self._settings_dialog.update()
+        self._settings_dialog.show()
 
     def _on_location_change(self, new_path):
         self._store.stop_watching()
@@ -156,7 +160,7 @@ class ModuleSidebar(ft.Container):
             e.global_position.x,
             e.global_position.y,
             [
-                ("Delete", ft.Icons.DELETE_OUTLINE, ft.Colors.RED_400, lambda m=module: self._module_delete(m)),
+                ("Delete", ft.Icons.DELETE_OUTLINE, ft.Colors.ERROR, lambda m=module: self._module_delete(m)),
             ],
         )
 

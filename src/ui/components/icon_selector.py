@@ -265,6 +265,9 @@ class IconSelector(ft.Container):
                                 bgcolor=ft.Colors.PRIMARY_CONTAINER
                                 if self._selected == icon_value
                                 else None,
+                                color=ft.Colors.ON_PRIMARY_CONTAINER
+                                if self._selected == icon_value
+                                else None,
                             ),
                             on_click=lambda e, ic=icon_value, lbl=label:
                                 self._select(e, lbl, ic),

@@ -10,8 +10,8 @@ Usage
 
     # on right-click (GestureDetector.on_secondary_tap_down):
     menu.show(e.global_position.x, e.global_position.y, [
-        ("Rename", ft.Icons.DRIVE_FILE_RENAME_OUTLINE, ft.Colors.WHITE, rename_fn),
-        ("Delete", ft.Icons.DELETE_OUTLINE, ft.Colors.RED_400, delete_fn),
+        ("Rename", ft.Icons.DRIVE_FILE_RENAME_OUTLINE, ft.Colors.ON_SURFACE, rename_fn),
+        ("Delete", ft.Icons.DELETE_OUTLINE, ft.Colors.ERROR, delete_fn),
     ])
 """
 
@@ -28,10 +28,10 @@ class ContextMenu(ft.Stack):
 
         self.menu_container = ft.Container(
             content=self._items_col,
-            bgcolor=ft.Colors.GREY_900,
+            bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST,
             border_radius=8,
             border=ft.Border.all(1, ft.Colors.OUTLINE_VARIANT),
-            shadow=ft.BoxShadow(blur_radius=12, color=ft.Colors.BLACK_54),
+            shadow=ft.BoxShadow(blur_radius=12, color=ft.Colors.SHADOW),
             padding=ft.Padding.symmetric(vertical=4),
             left=0,
             top=0,

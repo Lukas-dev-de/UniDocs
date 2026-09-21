@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## v2.3.0
+- new:
+    - custom themes: pick from 5 color palettes (UniDocs Blue, Nord, Dracula, Solarized, Monochrome) and switch between System / Light / Dark directly in the settings menu, applied live and remembered between restarts
+    - every part of the UI now derives its colors from the active color scheme instead of hardcoded values, so light mode is properly readable everywhere (context menus, dialogs, tiles, tag chips)
+- fix:
+    - tag chips and filter chips now pick a readable text color based on the tag's own color instead of always assuming white text
+
 ## v2.2.0
 - feature:
     - rename files directly in import menu

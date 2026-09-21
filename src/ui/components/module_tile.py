@@ -11,7 +11,7 @@ class ModuleTile(ft.IconButton):
         self.align = ft.Alignment.CENTER
         
         self.border_radius = 8
-        self.bgcolor = ft.Colors.BLUE_900
+        self.bgcolor = ft.Colors.PRIMARY_CONTAINER
         self.icon = module.icon
         self.tooltip = module.title
         self.on_click = self._handle_click 
@@ -23,7 +23,7 @@ class ModuleTile(ft.IconButton):
                 controls=[
                     ft.Icon(module.icon, size=48),
                     ft.Text(value=module.title, size=24, weight=ft.FontWeight.BOLD),
-                    ft.Text(value=module.description, size=14, color=ft.Colors.WHITE_70),
+                    ft.Text(value=module.description, size=14, color=ft.Colors.ON_PRIMARY_CONTAINER),
                 ],
             ),
         )

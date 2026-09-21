@@ -8,7 +8,7 @@ class ConfirmDialog(ft.AlertDialog):
             content=ft.Text(content),
             actions=[
                 ft.TextButton("Cancel", on_click=lambda e: self.close()),
-                ft.FilledButton("Confirm", style=ft.ButtonStyle(bgcolor=ft.Colors.RED_700), on_click=lambda e: self._handle_confirm(on_confirm)),
+                ft.FilledButton("Confirm", style=ft.ButtonStyle(bgcolor=ft.Colors.ERROR, color=ft.Colors.ON_ERROR), on_click=lambda e: self._handle_confirm(on_confirm)),
             ],
             actions_alignment=ft.MainAxisAlignment.END,
         )

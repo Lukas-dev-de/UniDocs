@@ -7,6 +7,7 @@ from ui.context_menu import ContextMenu
 from ui.tag_manager import TagManager
 from ui.components.tag_dialog import TagDialog
 from ui.components.tag_colors import TAG_PALETTE
+from ui.theme import on_color
 from ui.components.dialogs import ConfirmDialog, RenameDialog
 from pathlib import Path
 import subprocess
@@ -60,7 +61,7 @@ class ModuleDetail(ft.Container):
         self.description_text = ft.Text(
             value="Select a module to display information. You can create a new module by ",
             size=16,
-            color=ft.Colors.WHITE_70,
+            color=ft.Colors.ON_SURFACE_VARIANT,
         )
         self.description_field = ft.TextField(
             text_size=16,
@@ -92,7 +93,7 @@ class ModuleDetail(ft.Container):
             icon=ft.Icons.UPLOAD_FILE,
             tooltip="Import documents",
             on_click=self._open_import,
-            bgcolor=ft.Colors.BLUE_700,
+            bgcolor=ft.Colors.PRIMARY,
             mini=True,
         )
         self._select_btn = ft.IconButton(
@@ -139,21 +140,21 @@ class ModuleDetail(ft.Container):
         )
         self._sel_delete_btn = ft.TextButton(
             "Delete", icon=ft.Icons.DELETE_OUTLINE, on_click=self._batch_delete,
-            style=ft.ButtonStyle(color=ft.Colors.RED_400),
+            style=ft.ButtonStyle(color=ft.Colors.ERROR),
         )
         self._sel_done_btn = ft.TextButton(
             "Done", icon=ft.Icons.CLOSE, on_click=self._exit_select_mode,
         )
         self._selection_bar = ft.Container(
             visible=False,
-            bgcolor=ft.Colors.BLUE_GREY_800,
+            bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST,
             border_radius=10,
             padding=ft.Padding.symmetric(horizontal=12, vertical=6),
             content=ft.Row(
                 spacing=4,
                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
                 controls=[
-                    ft.Icon(ft.Icons.CHECK_CIRCLE_OUTLINE, size=18, color=ft.Colors.BLUE_300),
+                    ft.Icon(ft.Icons.CHECK_CIRCLE_OUTLINE, size=18, color=ft.Colors.PRIMARY),
                     self._sel_count_text,
                     ft.Container(expand=True),
                     self._sel_open_btn,
@@ -168,7 +169,7 @@ class ModuleDetail(ft.Container):
         self.border_radius = 16
         self.padding = 16
         self.expand = 19
-        self.bgcolor = ft.Colors.GREY_900
+        self.bgcolor = ft.Colors.SURFACE
 
         #  Layout 
         self.content = ft.Column(
@@ -195,7 +196,7 @@ class ModuleDetail(ft.Container):
                         ),
                     ],
                 ),
-                ft.Divider(color=ft.Colors.WHITE_24),
+                ft.Divider(color=ft.Colors.OUTLINE_VARIANT),
                 self._tag_filter_row,
                 self._selection_bar,
                 self.documents_grid,
@@ -326,7 +327,7 @@ class ModuleDetail(ft.Container):
 
     def _show_desc_text(self, value: str):
         self.description_text.value = value or "Click to add a description…"
-        self.description_text.color = ft.Colors.WHITE_70 if value else ft.Colors.WHITE_38
+        self.description_text.color = ft.Colors.ON_SURFACE_VARIANT if value else ft.Colors.OUTLINE
         self._desc_click.visible = True
         self.description_field.visible = False
 
@@ -451,7 +452,7 @@ class ModuleDetail(ft.Container):
 
     def _filter_chip(self, label: str, tag_id, selected: bool, color: str = "#1565C0") -> ft.Control:
         chip_content = ft.Container(
-            bgcolor=color if selected else ft.Colors.GREY_800,
+            bgcolor=color if selected else ft.Colors.SURFACE_CONTAINER_HIGH,
             border_radius=16,
             border=ft.Border.all(2, color) if not selected else None,
             padding=ft.Padding.symmetric(horizontal=10, vertical=4),
@@ -460,7 +461,7 @@ class ModuleDetail(ft.Container):
             content=ft.Text(
                 label,
                 size=12,
-                color=ft.Colors.WHITE if selected else ft.Colors.WHITE_70,
+                color=on_color(color) if selected else ft.Colors.ON_SURFACE_VARIANT,
             ),
         )
         # "All" chip has no tag_id - no right-click menu
@@ -561,16 +562,27 @@ class ModuleDetail(ft.Container):
         self._sel_delete_btn.disabled = not has_docs
         self._select_btn.icon = ft.Icons.CLOSE if active else ft.Icons.CHECK_CIRCLE_OUTLINE
         self._select_btn.tooltip = "Exit selection" if active else "Select documents"
-        self._select_btn.icon_color = ft.Colors.BLUE_300 if active else None
+        self._select_btn.icon_color = ft.Colors.PRIMARY if active else None
 
     def _sel_badge(self) -> ft.Control:
         return ft.Container(
             width=22,
             height=22,
             border_radius=11,
-            bgcolor=ft.Colors.BLUE_400,
-            border=ft.Border.all(2, ft.Colors.BLUE_GREY_700),
-            content=ft.Icon(ft.Icons.CHECK, size=14, color=ft.Colors.WHITE),
+            bgcolor=ft.Colors.PRIMARY,
+            border=ft.Border.all(2, ft.Colors.SURFACE),
+            content=ft.Icon(ft.Icons.CHECK, size=14, color=ft.Colors.ON_PRIMARY),
+        )
+
+    def _tag_chip(self, tag, size: int) -> ft.Control:
+        """Pill for a tag; text colour derived from the (user-chosen) colour."""
+        color = getattr(tag, "color", None) or "#1565C0"
+        name = getattr(tag, "name", tag)
+        return ft.Container(
+            bgcolor=color,
+            border_radius=10,
+            padding=ft.Padding.symmetric(horizontal=6, vertical=2),
+            content=ft.Text(name, size=size, color=on_color(color)),
         )
 
     #  batch actions 
@@ -661,25 +673,13 @@ class ModuleDetail(ft.Container):
             wrap=True,
             spacing=4,
             run_spacing=4,
-            controls=[
-                ft.Container(
-                    bgcolor=t.color if hasattr(t, "color") else "#1565C0",
-                    border_radius=10,
-                    padding=ft.Padding.symmetric(horizontal=6, vertical=2),
-                    content=ft.Text(
-                        t.name if hasattr(t, "name") else t,
-                        size=9,
-                        color=ft.Colors.WHITE,
-                    ),
-                )
-                for t in doc.tags
-            ],
+            controls=[self._tag_chip(t, 9) for t in doc.tags],
         )
         selected = doc.filepath in self._selected
         inner = ft.Container(
             border_radius=10,
-            bgcolor=ft.Colors.BLUE_GREY_700 if selected else ft.Colors.GREY_800,
-            border=ft.Border.all(2, ft.Colors.BLUE_300) if selected else None,
+            bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST if selected else ft.Colors.SURFACE_CONTAINER_HIGH,
+            border=ft.Border.all(2, ft.Colors.PRIMARY) if selected else None,
             padding=10,
             ink=True,
             on_click=lambda e, d=doc: self._on_doc_click(e, d),
@@ -689,7 +689,7 @@ class ModuleDetail(ft.Container):
                 alignment=ft.MainAxisAlignment.CENTER,
                 spacing=6,
                 controls=[
-                    ft.Icon(self._ext_icon(suffix), size=40, color=ft.Colors.BLUE_200),
+                    ft.Icon(self._ext_icon(suffix), size=40, color=ft.Colors.PRIMARY),
                     ft.Text(
                         doc.title,
                         size=12,
@@ -700,7 +700,7 @@ class ModuleDetail(ft.Container):
                     ft.Text(
                         suffix.lstrip(".").upper(),
                         size=10,
-                        color=ft.Colors.WHITE_38,
+                        color=ft.Colors.OUTLINE,
                     ),
                     tag_chips,
                 ],
@@ -737,25 +737,13 @@ class ModuleDetail(ft.Container):
         suffix = Path(doc.filepath).suffix
         tag_chips = ft.Row(
             spacing=4,
-            controls=[
-                ft.Container(
-                    bgcolor=t.color if hasattr(t, "color") else "#1565C0",
-                    border_radius=10,
-                    padding=ft.Padding.symmetric(horizontal=6, vertical=2),
-                    content=ft.Text(
-                        t.name if hasattr(t, "name") else t,
-                        size=10,
-                        color=ft.Colors.WHITE,
-                    ),
-                )
-                for t in doc.tags
-            ],
+            controls=[self._tag_chip(t, 10) for t in doc.tags],
         )
         selected = doc.filepath in self._selected
         inner = ft.Container(
             border_radius=8,
-            bgcolor=ft.Colors.BLUE_GREY_700 if selected else ft.Colors.GREY_800,
-            border=ft.Border.all(2, ft.Colors.BLUE_300) if selected else None,
+            bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST if selected else ft.Colors.SURFACE_CONTAINER_HIGH,
+            border=ft.Border.all(2, ft.Colors.PRIMARY) if selected else None,
             padding=ft.Padding.symmetric(horizontal=12, vertical=8),
             ink=True,
             on_click=lambda e, d=doc: self._on_doc_click(e, d),
@@ -764,7 +752,7 @@ class ModuleDetail(ft.Container):
                 spacing=12,
                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
                 controls=[
-                    ft.Icon(self._ext_icon(suffix), size=24, color=ft.Colors.BLUE_200),
+                    ft.Icon(self._ext_icon(suffix), size=24, color=ft.Colors.PRIMARY),
                     ft.Text(
                         doc.title,
                         size=14,
@@ -775,7 +763,7 @@ class ModuleDetail(ft.Container):
                     ft.Text(
                         suffix.lstrip(".").upper(),
                         size=11,
-                        color=ft.Colors.WHITE_38,
+                        color=ft.Colors.OUTLINE,
                         width=40,
                         text_align=ft.TextAlign.RIGHT,
                     ),
@@ -838,15 +826,15 @@ class ModuleDetail(ft.Container):
             e.global_position.x,
             e.global_position.y,
             [
-                ("Open", ft.Icons.OPEN_IN_NEW, ft.Colors.WHITE,
+                ("Open", ft.Icons.OPEN_IN_NEW, ft.Colors.ON_SURFACE,
                  lambda d=doc: self._open_file(d.filepath)),
-                ("Select", ft.Icons.CHECK_CIRCLE_OUTLINE, ft.Colors.WHITE,
+                ("Select", ft.Icons.CHECK_CIRCLE_OUTLINE, ft.Colors.ON_SURFACE,
                  lambda d=doc: self._select_doc(d)),
-                ("Manage Tags", ft.Icons.LABEL_OUTLINE, ft.Colors.BLUE_200,
+                ("Manage Tags", ft.Icons.LABEL_OUTLINE, ft.Colors.PRIMARY,
                  lambda d=doc: self._doc_manage_tags(d)),
-                ("Rename", ft.Icons.DRIVE_FILE_RENAME_OUTLINE, ft.Colors.WHITE,
+                ("Rename", ft.Icons.DRIVE_FILE_RENAME_OUTLINE, ft.Colors.ON_SURFACE,
                  lambda d=doc: self._doc_rename(d)),
-                ("Delete", ft.Icons.DELETE_OUTLINE, ft.Colors.RED_400,
+                ("Delete", ft.Icons.DELETE_OUTLINE, ft.Colors.ERROR,
                  lambda d=doc: self._doc_delete(d)),
             ],
         )
