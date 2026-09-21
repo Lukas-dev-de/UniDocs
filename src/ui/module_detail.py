@@ -708,12 +708,15 @@ class ModuleDetail(ft.Container):
         )
         tile: ft.Control = (
             ft.Stack(
+                fit=ft.StackFit.EXPAND,
                 controls=[
                     inner,
                     ft.Container(
                         content=self._sel_badge(),
-                        alignment=ft.Alignment.TOP_RIGHT,
-                        margin=ft.margin.only(top=6, right=6),
+                        right=6,
+                        top=6,
+                        width=22,
+                        height=22,
                     ),
                 ]
             )
