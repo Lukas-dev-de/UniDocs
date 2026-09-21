@@ -39,29 +39,6 @@ If you have suggestions feel free to list them here.
 
 <br>
 
-## Branch Naming Convention
-
-To maintain a clean and organized workflow, this project follows a specific branching strategy. Each branch name should consist of a category, an optional ID, and a short description.
-
-**Format:** `category/id-description`
-
-### Categories
-- `feature/`: New functionality or UI components.
-- `fix/`: Bug fixes and error handling.
-- `refactor/`: Code improvements without changing functionality.
-- `style/`: UI styling, colors, and layout tweaks.
-- `docs/`: Updates to documentation or comments.
-
-### Examples
-- `feature/01-sidebar-navigation`
-- `fix/02-pdf-display-offset`
-- `style/03-dark-mode-colors`
-
-### Workflow
-1. Create a new branch: `git checkout -b category/id-description`
-2. Commit your changes: `git commit -m "Brief explanation"`
-3. Create Pull Request once the feature is stable and tested.
-
 # For Developers
 
 ## Run the app
