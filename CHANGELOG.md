@@ -3,8 +3,10 @@
 ## v2.2.0
 - feature:
     - rename files directly in import menu
+    - select multiple documents at once (Ctrl/Cmd-click, Shift-range or long-press) to apply tags, open or delete them in batch
 - fix:
     - in the import menu when selecting files and then selecting more files it would forget the firstly selected ones. This is now no longer the case. Instead they now just get added to the list
+    - selection checkmark in the tile view no longer shrinks the document tiles
 
 ## v2.1.1
 - fix:
