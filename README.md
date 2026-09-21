@@ -13,6 +13,15 @@ Be aware, first start might take longer than usual ... I don't know why yet
 
 # Contributing:
 
+## Workflow
+
+`main` always reflects the latest release. Changes for a new version are collected on a
+`release/X.Y.Z` branch (for example `release/2.3.0`); once the version is ready it is
+merged into `main` and tagged. Small fixes can go directly on `main`.
+
+If a fix lands on `main` while a release branch is still open, merge `main` back into the
+release branch so the two do not drift apart.
+
 ## Stuff to implement:
 #### low effort
 - [x] add more icons for selection
