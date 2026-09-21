@@ -22,7 +22,7 @@ Be aware, first start might take longer than usual ... I don't know why yet
 - [x] feature: renaming files directly in import/import menu 
 - [ ] feature: add documents to module per drag n drop
 - [ ] feature: add colors to modules
-- [ ] fix: get links to repository in settings to work 
+- [x] fix: get links to repository in settings to work 
 - [x] feature: selecting multiple files (for example with ctl+click or middle click) to apply tags or delete multiple at once
 - [ ] feature: reorganise modules order in sidebar by draging
 - [ ] feature: grouping modules in sidebar

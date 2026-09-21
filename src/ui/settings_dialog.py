@@ -5,6 +5,11 @@ from app_storage.app_config import AppConfig
 
 CURRENT_VERSION = "2.2.0"
 
+REPO_URL = "https://github.com/Lukas-dev-de/UniDocs"
+RELEASES_URL = f"{REPO_URL}/releases"
+CHANGELOG_URL = f"{REPO_URL}/blob/main/CHANGELOG.md"
+ISSUES_URL = f"{REPO_URL}/issues"
+
 class SettingsDialog(ft.AlertDialog):
     """
     A self-contained settings dialog.
@@ -41,39 +46,64 @@ class SettingsDialog(ft.AlertDialog):
         #  LAYOUT 
         self.modal = True
 
-        self.title = ft.Row(controls=[
-            ft.Row(
-                controls=[
-                    ft.Icon(ft.Icons.SETTINGS, size=20),
-                    ft.Text("Settings", size=18, weight=ft.FontWeight.BOLD),
-                    ft.Text(f"Version {CURRENT_VERSION}", size=12,)
-                ],
-                spacing=8
-            ),
-        ])
+        self.title = ft.Row(
+            spacing=8,
+            controls=[
+                ft.Icon(ft.Icons.SETTINGS, size=20),
+                ft.Text("Settings", size=18, weight=ft.FontWeight.BOLD),
+            ],
+        )
 
         self.content = ft.Container(
             width=480,
             content=ft.Column(
                 tight=True,
-                spacing=20,
+                spacing=16,
                 controls=[
-                    #  UniDocs folder location 
+                    # UniDocs folder location
                     ft.Column(spacing=0, controls=[
                         ft.Text("UniDocs location", weight=ft.FontWeight.W_600),
                         ft.Row(controls=[self._path_field]),
                         self._status,
                     ]),
 
-                    # Custom Themes
-                    ft.Column(controls=[
-                        ft.Text("Themes", weight=ft.FontWeight.W_600),
-                        ft.Text("Coming soon"),
-                    ]),
+                    ft.Divider(height=1),
 
-                    #  Bug Reporting 
-                    ft.Text("GitHub: https://github.com/Lukas-dev-de/UniDocs/"),
-             
+                    # Themes
+                    self._section(
+                        "Themes",
+                        ft.Row(
+                            spacing=8,
+                            controls=[
+                                ft.Icon(
+                                    ft.Icons.PALETTE_OUTLINED,
+                                    size=16,
+                                    color=ft.Colors.GREY_500,
+                                ),
+                                ft.Text(
+                                    "Coming soon",
+                                    size=13,
+                                    color=ft.Colors.GREY_500,
+                                ),
+                            ],
+                        ),
+                    ),
+
+                    ft.Divider(height=1),
+
+                    # About / links
+                    self._section(
+                        "About",
+                        self._link_row("Source code", ft.Icons.CODE, REPO_URL),
+                        self._link_row("Releases", ft.Icons.NEW_RELEASES, RELEASES_URL),
+                        self._link_row("Changelog", ft.Icons.DESCRIPTION, CHANGELOG_URL),
+                        self._link_row("Report an issue", ft.Icons.BUG_REPORT_OUTLINED, ISSUES_URL),
+                        ft.Text(
+                            f"Version {CURRENT_VERSION}",
+                            size=12,
+                            color=ft.Colors.GREY_500,
+                        ),
+                    ),
                 ],
             ),
         )
@@ -82,6 +112,23 @@ class SettingsDialog(ft.AlertDialog):
             ft.TextButton("Cancel", on_click=self._cancel),
             ft.FilledButton("Apply", on_click=self._apply),
         ]
+
+    #  helpers 
+
+    def _section(self, title: str, *controls) -> ft.Column:
+        return ft.Column(
+            spacing=6,
+            tight=True,
+            controls=[
+                ft.Text(title, weight=ft.FontWeight.W_600),
+                *controls,
+            ],
+        )
+
+    def _link_row(self, label: str, icon: str, url: str) -> ft.TextButton:
+        # `url` is handled natively by Flet: clicking opens the link in the
+        # user's default browser (works on both desktop and web).
+        return ft.TextButton(label, icon=icon, url=url)
 
     #  private 
 
