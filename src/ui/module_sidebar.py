@@ -1,26 +1,38 @@
 import flet as ft
 from ui.components.module_tile import ModuleTile
 from ui.components.icon_selector import IconSelector
+from ui.components.color_selector import ColorSelector
+from ui.components.module_edit_dialog import ModuleEditDialog
 from ui.settings_dialog import SettingsDialog
 from ui.context_menu import ContextMenu
 from models.module import Module
 from app_storage.module_store import ModuleStore
+from ui.theme import ThemeManager
 
 
 @ft.control
 class ModuleSidebar(ft.Container):
     padding: int = 8
     border_radius: int = 16
-    bgcolor: ft.Colors = ft.Colors.GREY_900
+    bgcolor: ft.Colors = ft.Colors.SURFACE
 
-    def __init__(self, store: ModuleStore, on_module_select=None):
+    def __init__(
+        self,
+        store: ModuleStore,
+        on_module_select=None,
+        on_module_update=None,
+        theme: ThemeManager | None = None,
+    ):
         super().__init__()
         self._store = store
         self._on_module_select = on_module_select
+        self._on_module_update = on_module_update
+        self._theme = theme
 
         self.modules_list = ft.Column(scroll=ft.ScrollMode.AUTO, expand=True)
 
         self.icon_selector = IconSelector()
+        self.color_selector = ColorSelector()
         self.title_field = ft.TextField(
             hint_text="New Module", on_submit=self.add_module, expand=True
         )
@@ -28,7 +40,6 @@ class ModuleSidebar(ft.Container):
             hint_text="Description", on_submit=self.add_module
         )
 
-        ### UI-LAYOUT ###
         self.content = ft.Column(
             expand=True,
             alignment="CENTER",
@@ -39,7 +50,11 @@ class ModuleSidebar(ft.Container):
                     items=[
                         ft.PopupMenuItem(
                             content=ft.Row(
-                                controls=[self.icon_selector, self.title_field]
+                                controls=[
+                                    self.icon_selector,
+                                    self.color_selector,
+                                    self.title_field,
+                                ]
                             ),
                             padding=8,
                         ),
@@ -67,11 +82,15 @@ class ModuleSidebar(ft.Container):
     def did_mount(self):
         self._settings_dialog = SettingsDialog(
             store=self._store,
+            theme=self._theme,
             on_location_change=self._on_location_change,
-
         )
 
         self._ctx_menu = ContextMenu()
+        self._edit_dialog = ModuleEditDialog(
+            store=self._store,
+            on_saved=self._on_module_edited,
+        )
 
         # Delete confirm dialog
         self._delete_label = ft.Text("")
@@ -84,14 +103,17 @@ class ModuleSidebar(ft.Container):
                 ft.TextButton("Cancel", on_click=lambda e: self._close_dialog(self._delete_dialog)),
                 ft.FilledButton(
                     "Delete",
-                    style=ft.ButtonStyle(bgcolor=ft.Colors.RED_700),
+                    style=ft.ButtonStyle(
+                        bgcolor=ft.Colors.ERROR,
+                        color=ft.Colors.ON_ERROR,
+                    ),
                     on_click=self._commit_delete,
                 ),
             ],
             actions_alignment=ft.MainAxisAlignment.END,
         )
 
-        for item in (self._settings_dialog, self._ctx_menu, self._delete_dialog):
+        for item in (self._settings_dialog, self._ctx_menu, self._delete_dialog, self._edit_dialog):
             self.page.overlay.append(item)
         self.page.update()
 
@@ -99,15 +121,14 @@ class ModuleSidebar(ft.Container):
         page = self.page
         if page is None:
             return
-        for item in (self._settings_dialog, self._ctx_menu, self._delete_dialog):
+        for item in (self._settings_dialog, self._ctx_menu, self._delete_dialog, self._edit_dialog):
             if hasattr(self, "_settings_dialog") and item in page.overlay:
                 page.overlay.remove(item)
 
     #  settings 
 
     def _open_settings(self, e):
-        self._settings_dialog.open = True
-        self._settings_dialog.update()
+        self._settings_dialog.show()
 
     def _on_location_change(self, new_path):
         self._store.stop_watching()
@@ -130,6 +151,11 @@ class ModuleSidebar(ft.Container):
             on_secondary_tap_down=lambda e, m=module: self._show_module_menu(e, m),
         )
 
+    @staticmethod
+    def _tile_module(control) -> Module | None:
+        """Dig the Module back out of a tile built by ``_make_tile``."""
+        return getattr(getattr(control, "content", None), "module", None)
+
     def add_module(self, e: ft.ControlEvent):
         title = self.title_field.value.strip()
         if not title:
@@ -139,24 +165,81 @@ class ModuleSidebar(ft.Container):
             title=title,
             description=self.description_field.value,
             icon=self.icon_selector.value or ft.Icons.FOLDER,
+            color=self.color_selector.value,
         )
 
         self._store.save_module(_module)
         self.modules_list.controls.append(self._make_tile(_module))
+        # Keep the new module where the list just put it (at the end) rather
+        # than letting it jump once the sidebar reloads.
+        self._persist_order()
 
         self.icon_selector.reset()
+        self.color_selector.reset()
         self.title_field.value = ""
         self.description_field.value = ""
         self.update()
 
+    #  ordering 
+
+    def _persist_order(self):
+        self._store.save_order(
+            [
+                module.title
+                for module in (
+                    self._tile_module(c) for c in self.modules_list.controls
+                )
+                if module
+            ]
+        )
+
+    def _module_index(self, module: Module) -> int | None:
+        """Position of *module* in the sidebar, or None if it is not shown."""
+        for index, control in enumerate(self.modules_list.controls):
+            tile = self._tile_module(control)
+            if tile is not None and tile.title == module.title:
+                return index
+        return None
+
+    def _move_module(self, module: Module, offset: int):
+        """Swap *module* with its neighbour above (-1) or below (+1)."""
+        controls = self.modules_list.controls
+        index = self._module_index(module)
+        if index is None:
+            return
+        target = index + offset
+        if not 0 <= target < len(controls):
+            return
+
+        controls.insert(target, controls.pop(index))
+        self.modules_list.update()
+        self._persist_order()
+
     #  context menu 
 
     def _show_module_menu(self, e: ft.TapEvent, module: Module):
+        index = self._module_index(module)
+        # A module at one end of the list gets a greyed-out entry rather than a
+        # missing one, so the menu keeps the same shape wherever it is opened.
+        move_up = (
+            (lambda m=module: self._move_module(m, -1))
+            if index is not None and index > 0
+            else None
+        )
+        move_down = (
+            (lambda m=module: self._move_module(m, +1))
+            if index is not None and index < len(self.modules_list.controls) - 1
+            else None
+        )
+
         self._ctx_menu.show(
             e.global_position.x,
             e.global_position.y,
             [
-                ("Delete", ft.Icons.DELETE_OUTLINE, ft.Colors.RED_400, lambda m=module: self._module_delete(m)),
+                ("Edit", ft.Icons.EDIT_OUTLINED, ft.Colors.ON_SURFACE, lambda m=module: self._module_edit(m)),
+                ("Move up", ft.Icons.ARROW_UPWARD, ft.Colors.ON_SURFACE, move_up),
+                ("Move down", ft.Icons.ARROW_DOWNWARD, ft.Colors.ON_SURFACE, move_down),
+                ("Delete", ft.Icons.DELETE_OUTLINE, ft.Colors.ERROR, lambda m=module: self._module_delete(m)),
             ],
         )
 
@@ -178,6 +261,19 @@ class ModuleSidebar(ft.Container):
             self._delete_confirm_cb()
 
     #  module actions 
+
+    def _module_edit(self, module: Module):
+        self._edit_dialog.open_for(module)
+
+    def _on_module_edited(self, module: Module, previous_title: str | None):
+        """Re-render the sidebar, and let the detail view refresh itself.
+
+        ``previous_title`` is what the module was called before the edit, so
+        the detail view can tell whether *it* was the module being edited.
+        """
+        self._reload_and_update()
+        if self._on_module_update:
+            self._on_module_update(module, previous_title)
 
     def _module_delete(self, module: Module):
         def on_confirm():

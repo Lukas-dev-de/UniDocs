@@ -10,14 +10,13 @@ Usage
 
     # on right-click (GestureDetector.on_secondary_tap_down):
     menu.show(e.global_position.x, e.global_position.y, [
-        ("Rename", ft.Icons.DRIVE_FILE_RENAME_OUTLINE, ft.Colors.WHITE, rename_fn),
-        ("Delete", ft.Icons.DELETE_OUTLINE, ft.Colors.RED_400, delete_fn),
+        ("Rename", ft.Icons.DRIVE_FILE_RENAME_OUTLINE, ft.Colors.ON_SURFACE, rename_fn),
+        ("Delete", ft.Icons.DELETE_OUTLINE, ft.Colors.ERROR, delete_fn),
     ])
 """
 
 import flet as ft
 
-# See AlertDialog for future rework
 class ContextMenu(ft.Stack):
     def __init__(self):
         super().__init__()
@@ -28,10 +27,10 @@ class ContextMenu(ft.Stack):
 
         self.menu_container = ft.Container(
             content=self._items_col,
-            bgcolor=ft.Colors.GREY_900,
+            bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST,
             border_radius=8,
             border=ft.Border.all(1, ft.Colors.OUTLINE_VARIANT),
-            shadow=ft.BoxShadow(blur_radius=12, color=ft.Colors.BLACK_54),
+            shadow=ft.BoxShadow(blur_radius=12, color=ft.Colors.SHADOW),
             padding=ft.Padding.symmetric(vertical=4),
             left=0,
             top=0,
@@ -46,21 +45,30 @@ class ContextMenu(ft.Stack):
 
         self.controls = [self.scrim, self.menu_container]
 
-        
-
     def show(self, x: float, y: float, items: list[tuple]):
+        """*items* are ``(label, icon, color, callback)`` tuples.
+
+        A ``callback`` of ``None`` renders the entry dimmed and unclickable,
+        which is how a caller shows an action that is unavailable where the
+        menu was opened ("Move up" on the module that is already first).
+        """
         self._items_col.controls.clear()
 
         for label, icon, color, cb in items:
+            enabled = cb is not None
+            # Leave the colour unset when disabled so the children inherit the
+            # button's own greyed-out foreground instead of fighting it.
+            tint = color if enabled else None
             self._items_col.controls.append(
                 ft.TextButton(
                     content=ft.Row(
                         spacing=10,
                         controls=[
-                            ft.Icon(icon, size=16, color=color),
-                            ft.Text(label, color=color, size=13),
+                            ft.Icon(icon, size=16, color=tint),
+                            ft.Text(label, color=tint, size=13),
                         ],
                     ),
+                    disabled=not enabled,
                     on_click=lambda e, fn=cb: self._select(fn),
                 )
             )
@@ -77,4 +85,5 @@ class ContextMenu(ft.Stack):
 
     def _select(self, cb):
         self.hide()
-        cb()
+        if cb is not None:
+            cb()

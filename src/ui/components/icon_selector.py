@@ -190,7 +190,6 @@ class IconSelector(ft.Container):
             tooltip="Select icon",
         )
 
-        # SEARCH FIELD
         self._search_field = ft.TextField(
             hint_text="Search icons...",
             dense=True,
@@ -199,17 +198,14 @@ class IconSelector(ft.Container):
             on_change=self._filter_icons,
         )
 
-        # GRID HOLDER
         self._grid_column = ft.Column(
             spacing=2,
             scroll=ft.ScrollMode.AUTO,
             height=300,
-            
         )
 
         self._refresh_grid()
 
-        # POPUP CONTENT
         popup_content = ft.Container(
             width=350,
             padding=10,
@@ -265,6 +261,9 @@ class IconSelector(ft.Container):
                                 bgcolor=ft.Colors.PRIMARY_CONTAINER
                                 if self._selected == icon_value
                                 else None,
+                                color=ft.Colors.ON_PRIMARY_CONTAINER
+                                if self._selected == icon_value
+                                else None,
                             ),
                             on_click=lambda e, ic=icon_value, lbl=label:
                                 self._select(e, lbl, ic),
@@ -287,7 +286,6 @@ class IconSelector(ft.Container):
         self._selected_icon_display.name = icon_value
         self._trigger_container.update()
 
-        print(f"icon selected: {icon_value}")
         self._refresh_grid()
 
         if self._on_change:
@@ -297,6 +295,16 @@ class IconSelector(ft.Container):
         self._selected = None
         self._selected_icon_display.name = default
         self._trigger_container.update()
+        self._refresh_grid()
+
+    def set_value(self, icon_value=None):
+        """Show *icon_value* as the selection without firing ``on_change``."""
+        self._selected = icon_value
+        self._selected_icon_display.name = icon_value or ft.Icons.STAR
+        try:
+            self._trigger_container.update()
+        except RuntimeError:
+            pass
         self._refresh_grid()
 
     @property

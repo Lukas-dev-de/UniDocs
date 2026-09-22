@@ -57,11 +57,11 @@ class ImportDialog(ft.AlertDialog):
         self._no_files_text = ft.Text(
             "No files selected.",
             size=12,
-            color=ft.Colors.WHITE_38,
+            color=ft.Colors.OUTLINE,
             italic=True,
         )
 
-        self._status = ft.Text("", color=ft.Colors.RED_400, size=12)
+        self._status = ft.Text("", color=ft.Colors.ERROR, size=12)
 
         #  layout 
         self.modal = True
@@ -204,7 +204,7 @@ class ImportDialog(ft.AlertDialog):
                         ft.Icon(
                             ft.Icons.INSERT_DRIVE_FILE,
                             size=16,
-                            color=ft.Colors.BLUE_200,
+                            color=ft.Colors.PRIMARY,
                         ),
                         ft.Stack(
                             expand=True,

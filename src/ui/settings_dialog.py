@@ -2,8 +2,9 @@ import flet as ft
 from pathlib import Path
 from app_storage.module_store import ModuleStore
 from app_storage.app_config import AppConfig
+from ui.theme import MODE_LABELS, PALETTES, ThemeManager
 
-CURRENT_VERSION = "2.2.0"
+CURRENT_VERSION = "2.3.0"
 
 REPO_URL = "https://github.com/Lukas-dev-de/UniDocs"
 RELEASES_URL = f"{REPO_URL}/releases"
@@ -28,11 +29,14 @@ class SettingsDialog(ft.AlertDialog):
             The caller is responsible for reloading the store / sidebar.
     """
 
-    def __init__(self, store: ModuleStore, on_location_change=None):
+    def __init__(self, store: ModuleStore, on_location_change=None, theme: ThemeManager | None = None):
         super().__init__()
         self._store = store
         self._cfg = AppConfig()
         self._on_location_change = on_location_change
+        # Shared with main.py when available; otherwise a local fallback is
+        # created and attached once this dialog mounts.
+        self._theme = theme or ThemeManager(self._cfg)
 
         self._path_field = ft.TextField(
             value=str(store.root),
@@ -41,10 +45,41 @@ class SettingsDialog(ft.AlertDialog):
             on_submit=self._apply,
         )
 
-        self._status = ft.Text("", color=ft.Colors.RED_400, size=12)
+        self._status = ft.Text("", color=ft.Colors.ERROR, size=12)
+
+        #  appearance controls 
+        self._mode_selector = ft.SegmentedButton(
+            selected=[self._theme.mode],
+            allow_multiple_selection=False,
+            show_selected_icon=False,
+            segments=[
+                ft.Segment(value="system", label=ft.Text(MODE_LABELS["system"]),
+                           icon=ft.Icon(ft.Icons.BRIGHTNESS_AUTO)),
+                ft.Segment(value="light", label=ft.Text(MODE_LABELS["light"]),
+                           icon=ft.Icon(ft.Icons.LIGHT_MODE)),
+                ft.Segment(value="dark", label=ft.Text(MODE_LABELS["dark"]),
+                           icon=ft.Icon(ft.Icons.DARK_MODE)),
+            ],
+            on_change=self._on_mode_change,
+        )
+
+        self._palette_dropdown = ft.Dropdown(
+            label="Color palette",
+            value=self._theme.palette_id,
+            options=[
+                ft.dropdown.Option(key=p.id, text=p.label)
+                for p in PALETTES.values()
+            ],
+            on_select=self._on_palette_change,
+            expand=True,
+        )
 
         #  LAYOUT 
         self.modal = True
+        # Let Material wrap title + content in a scroll view, so that on a short
+        # window the body scrolls instead of overflowing past the dialog (and
+        # the window) while the buttons stay visible.
+        self.scrollable = True
 
         self.title = ft.Row(
             spacing=8,
@@ -69,23 +104,18 @@ class SettingsDialog(ft.AlertDialog):
 
                     ft.Divider(height=1),
 
-                    # Themes
+                    # Appearance (theme palette + light/dark mode)
                     self._section(
-                        "Themes",
-                        ft.Row(
-                            spacing=8,
-                            controls=[
-                                ft.Icon(
-                                    ft.Icons.PALETTE_OUTLINED,
-                                    size=16,
-                                    color=ft.Colors.GREY_500,
-                                ),
-                                ft.Text(
-                                    "Coming soon",
-                                    size=13,
-                                    color=ft.Colors.GREY_500,
-                                ),
-                            ],
+                        "Appearance",
+                        self._mode_selector,
+                        # The palette dropdown floats its label above the field,
+                        # so it needs extra room below the mode selector.
+                        ft.Container(height=12, bgcolor=ft.Colors.TRANSPARENT),
+                        self._palette_dropdown,
+                        ft.Text(
+                            "Changes apply instantly and are saved.",
+                            size=12,
+                            color=ft.Colors.ON_SURFACE_VARIANT,
                         ),
                     ),
 
@@ -101,7 +131,7 @@ class SettingsDialog(ft.AlertDialog):
                         ft.Text(
                             f"Version {CURRENT_VERSION}",
                             size=12,
-                            color=ft.Colors.GREY_500,
+                            color=ft.Colors.ON_SURFACE_VARIANT,
                         ),
                     ),
                 ],
@@ -112,6 +142,13 @@ class SettingsDialog(ft.AlertDialog):
             ft.TextButton("Cancel", on_click=self._cancel),
             ft.FilledButton("Apply", on_click=self._apply),
         ]
+
+    #  lifecycle 
+
+    def did_mount(self):
+        # Bind the fallback manager (if enabled) to the live page.
+        if not self._theme.attached:
+            self._theme.attach(self.page)
 
     #  helpers 
 
@@ -132,6 +169,32 @@ class SettingsDialog(ft.AlertDialog):
 
     #  private 
 
+    def _on_mode_change(self, e):
+        # `selected` is a list of Segment.value strings (Flet 0.84).
+        selected = list(e.control.selected or [])
+        self._theme.set_mode(selected[0] if selected else "system")
+
+    def _sync_mode_selector(self) -> None:
+        """Re-align the segmented button after an external mode change."""
+        self._mode_selector.selected = [self._theme.mode]
+
+    def _sync_palette_dropdown(self) -> None:
+        """Re-align the palette dropdown after an external change."""
+        self._palette_dropdown.value = self._theme.palette_id
+
+    #  public 
+
+    def show(self) -> None:
+        """Open the dialog, re-syncing the appearance controls first."""
+        self._sync_mode_selector()
+        self._sync_palette_dropdown()
+        self._status.value = ""
+        self.open = True
+        self.update()
+
+    def _on_palette_change(self, e):
+        self._theme.set_palette(self._palette_dropdown.value)
+
     def _cancel(self, e):
         self._status.value = ""
         self.open = False
@@ -145,7 +208,6 @@ class SettingsDialog(ft.AlertDialog):
 
         new_path = Path(raw).expanduser().resolve()
 
-        # basic validation
         if new_path == self._store.root:
             self.open = False
             self.update()
@@ -160,7 +222,6 @@ class SettingsDialog(ft.AlertDialog):
         # persist to config.json so the path survives restarts
         self._cfg.unidocs_location = new_path
 
-        # commit to live store
         self._store.root = new_path
         self._status.value = ""
         self.open = False

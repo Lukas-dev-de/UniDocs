@@ -6,16 +6,20 @@ Reads and writes a config.json file next to main.py.
 config.json example
 -------------------
 {
-  "unidocs_location": "/home/user/Documents/UniDocs"
+  "unidocs_location": "/home/user/Documents/UniDocs",
+  "theme_palette": "nord",
+  "theme_mode": "dark"
 }
 
 Usage
 -----
-    from storage.app_config import AppConfig
+    from app_storage.app_config import AppConfig
 
     cfg = AppConfig()
     cfg.unidocs_location          # → Path
     cfg.unidocs_location = Path("/new/path")   # saves immediately
+    cfg.theme_palette             # → "unidocs"  (see ui.theme.PALETTES)
+    cfg.theme_mode                # → "system"  (system | light | dark)
 """
 
 from __future__ import annotations
@@ -46,6 +50,26 @@ class AppConfig:
     @unidocs_location.setter
     def unidocs_location(self, value: Path):
         self._data["unidocs_location"] = str(value)
+        self._save()
+
+    @property
+    def theme_palette(self) -> str:
+        """Id of the active colour palette (see ``ui.theme.PALETTES``)."""
+        return self._data.get("theme_palette") or "unidocs"
+
+    @theme_palette.setter
+    def theme_palette(self, value: str):
+        self._data["theme_palette"] = value
+        self._save()
+
+    @property
+    def theme_mode(self) -> str:
+        """Appearance mode: ``"system" | "light" | "dark"``."""
+        return self._data.get("theme_mode") or "system"
+
+    @theme_mode.setter
+    def theme_mode(self, value: str):
+        self._data["theme_mode"] = value
         self._save()
 
     #  persistence 

@@ -1,5 +1,5 @@
 """
-storage/module_store.py
+app_storage/module_store.py
 -----------------------
 Filesystem-backed persistence for Module objects.
 
@@ -7,8 +7,9 @@ Layout
 ------
 UniDocs/
 ├ tags.json              ← global tag registry: [{"id": "<uuid>", "name": "...", "color": "..."}, ...]
+├ .order                 ← sidebar order: ["Physics 101", "Math", ...]  (folder names)
 ├ Physics 101/
-│   ├ .meta              ← JSON: {"description": "...", "icon": "SCIENCE"}
+│   ├ .meta              ← JSON: {"description": "...", "icon": "SCIENCE", "color": "#1A5FB4"}
 │   ├ .doc_tags          ← {"lecture.pdf": ["<uuid1>", "<uuid2>"], ...}  (tag IDs, not names)
 │   └ lecture.pdf
 └ Math/
@@ -35,6 +36,7 @@ UNIDOCS_DIR = Path(__file__).parent.parent / "UniDocs"
 META_FILENAME = ".meta"
 DOC_TAGS_FILENAME = ".doc_tags"
 GLOBAL_TAGS_FILENAME = "tags.json"
+ORDER_FILENAME = ".order"
 _DEFAULT_ICON_NAME = "FOLDER"
 
 
@@ -85,14 +87,25 @@ class ModuleStore:
     # -- module CRUD ----------------------------------------------------------
 
     def load_all(self) -> list[Module]:
-        """Return a Module for every sub-folder that contains a .meta file."""
-        modules: list[Module] = []
+        """Return a Module for every sub-folder that contains a .meta file.
+
+        The list follows the order the user moved the modules into (see
+        :meth:`save_order`). Modules missing from that order are appended
+        alphabetically, which is also the order used before anything has been
+        rearranged.
+        """
+        found: list[tuple[str, Module]] = []
         for folder in sorted(self.root.iterdir()):
             if folder.is_dir():
                 module = self._load_module(folder)
                 if module:
-                    modules.append(module)
-        return modules
+                    found.append((folder.name, module))
+
+        order = self.load_order()
+        if order:
+            rank = {name: i for i, name in enumerate(order)}
+            found.sort(key=lambda item: rank.get(item[0], len(rank)))
+        return [module for _, module in found]
 
     def save_module(self, module: Module) -> Path:
         folder = self._folder_for(module)
@@ -112,6 +125,61 @@ class ModuleStore:
         if old_folder.exists() and old_folder != new_folder:
             old_folder.rename(new_folder)
         module.title = new_title
+
+        # A saved order is keyed by folder name, so follow the rename instead
+        # of letting the module drop to the alphabetical tail.
+        if old_folder.name != new_folder.name:
+            order = self.load_order()
+            if order:
+                self.save_order(
+                    [
+                        new_folder.name if name == old_folder.name else name
+                        for name in order
+                    ]
+                )
+
+    def rename_conflict(self, module: Module, new_title: str) -> bool:
+        """True if renaming *module* to *new_title* would hit another module.
+
+        Renaming to a title that maps onto the module's own folder (say, one
+        that only differs by a character ``_safe_name`` strips) is not a
+        conflict. Callers should check this before ``rename_module``, which
+        would otherwise silently clobber the other folder.
+        """
+        target = self.root / _safe_name(new_title)
+        return target != self._folder_for(module) and target.exists()
+
+    # -- sidebar order --------------------------------------------------------
+
+    def load_order(self) -> list[str]:
+        """Folder names in the order the user arranged them in.
+
+        Returns an empty list when the order was never changed, which tells
+        :meth:`load_all` to fall back to alphabetical sorting.
+        """
+        path = self.root / ORDER_FILENAME
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (FileNotFoundError, json.JSONDecodeError, OSError):
+            return []
+        if not isinstance(data, list):
+            return []
+        return [str(name) for name in data]
+
+    def save_order(self, titles: list[str]) -> None:
+        """Persist the module order shown in the sidebar.
+
+        Takes module *titles* and stores the folder name each one maps to, so
+        the file stays comparable with :meth:`load_all` even for titles that
+        ``_safe_name`` has to sanitise ("Physics: Intro" lives in "Physics
+        Intro"). Names that no longer exist are harmless: they simply never
+        match a folder and are dropped the next time the order is written.
+        """
+        self.root.mkdir(parents=True, exist_ok=True)
+        (self.root / ORDER_FILENAME).write_text(
+            json.dumps([_safe_name(title) for title in titles], ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
 
     # -- document CRUD --------------------------------------------------------
 
@@ -304,7 +372,10 @@ class ModuleStore:
 
             class _Handler(FileSystemEventHandler):
                 def on_any_event(self, event):
-                    if event.src_path.endswith(META_FILENAME):
+                    # Our own bookkeeping files: the order is written from the
+                    # sidebar, which repaints itself, so reacting here would
+                    # only trigger a pointless reload.
+                    if Path(event.src_path).name in (META_FILENAME, ORDER_FILENAME):
                         return
                     if store._on_change:
                         store._on_change()
@@ -341,6 +412,8 @@ class ModuleStore:
             title=folder.name,
             description=meta.get("description", ""),
             icon=_name_to_icon(icon_name),
+            # Absent (or null) for modules created before v2.3.0 → follows theme.
+            color=meta.get("color") or None,
         )
 
         # build id→Tag lookup from the live global registry
@@ -370,6 +443,7 @@ class ModuleStore:
         meta = {
             "description": module.description,
             "icon": _icon_to_name(module.icon or _DEFAULT_ICON_NAME),
+            "color": module.color,
         }
         (folder / META_FILENAME).write_text(
             json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8"

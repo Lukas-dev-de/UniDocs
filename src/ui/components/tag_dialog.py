@@ -14,6 +14,7 @@ from models.module import Module
 from models.tag import DEFAULT_TAG_COLOR
 from app_storage.module_store import ModuleStore
 from ui.components.tag_colors import TAG_PALETTE
+from ui.theme import on_color
 
 
 class TagDialog(ft.AlertDialog):
@@ -50,17 +51,17 @@ class TagDialog(ft.AlertDialog):
             height=28,
             border_radius=6,
             bgcolor=self._new_tag_color,
-            border=ft.Border.all(2, ft.Colors.WHITE_30),
+            border=ft.Border.all(2, ft.Colors.OUTLINE_VARIANT),
             tooltip="Pick color",
             on_click=self._open_color_picker,
             ink=True,
         )
-        self._status = ft.Text("", color=ft.Colors.RED_400, size=12)
+        self._status = ft.Text("", color=ft.Colors.ERROR, size=12)
 
         # color picker popup
         self._color_picker_container = ft.Container(
             visible=False,
-            bgcolor=ft.Colors.GREY_800,
+            bgcolor=ft.Colors.SURFACE_CONTAINER_HIGH,
             border_radius=10,
             border=ft.Border.all(1, ft.Colors.OUTLINE_VARIANT),
             padding=10,
@@ -91,7 +92,7 @@ class TagDialog(ft.AlertDialog):
                     ft.Text(
                         "Toggle tags for the selected document(s). Create new global tags below.",
                         size=13,
-                        color=ft.Colors.WHITE_70,
+                        color=ft.Colors.ON_SURFACE_VARIANT,
                     ),
                     ft.Container(
                         border=ft.Border.all(1, ft.Colors.OUTLINE_VARIANT),
@@ -186,7 +187,7 @@ class TagDialog(ft.AlertDialog):
         if not all_tags:
             self._chips_row.controls.append(
                 ft.Text("No tags yet – add one below.", size=12,
-                        color=ft.Colors.WHITE_38, italic=True)
+                        color=ft.Colors.OUTLINE, italic=True)
             )
         else:
             for tag in sorted(all_tags, key=lambda t: t["name"]):
@@ -201,10 +202,10 @@ class TagDialog(ft.AlertDialog):
             bgcolor = color
             border = None
         elif state is None:
-            bgcolor = ft.Colors.GREY_800
+            bgcolor = ft.Colors.SURFACE_CONTAINER_HIGH
             border = ft.Border.all(2, color)
         else:
-            bgcolor = ft.Colors.GREY_800
+            bgcolor = ft.Colors.SURFACE_CONTAINER_HIGH
             border = ft.Border.all(2, ft.Colors.OUTLINE_VARIANT)
         return ft.Container(
             key=tag_id,
@@ -221,12 +222,12 @@ class TagDialog(ft.AlertDialog):
                     ft.Icon(
                         ft.Icons.LABEL if state is True else ft.Icons.LABEL_OUTLINE,
                         size=14,
-                        color=ft.Colors.WHITE if state is True else color,
+                        color=on_color(color) if state is True else color,
                     ),
                     ft.Text(
                         tag_name,
                         size=13,
-                        color=ft.Colors.WHITE if state is True else ft.Colors.WHITE_70,
+                        color=on_color(color) if state is True else ft.Colors.ON_SURFACE_VARIANT,
                     ),
                 ],
             ),

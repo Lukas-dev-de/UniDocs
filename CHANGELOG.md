@@ -1,5 +1,20 @@
 # CHANGELOG
 
+## v2.3.0
+- new:
+    - Windows releases now also ship a real installer next to the portable zip: it adds a Start Menu entry, an (optional) desktop shortcut and an uninstaller in "Apps & features", and needs no admin rights
+    - modules can be given an accent color, shown on their tile in the sidebar; modules without one keep following the theme as before
+    - modules can be edited from the sidebar context menu (right click): title, description, icon and color in one dialog
+    - modules can be moved up and down from the sidebar context menu (right click); the arrangement is remembered in a .order file next to tags.json
+    - custom themes: pick from 5 color palettes (UniDocs Blue, Nord, Dracula, Solarized, Monochrome) and switch between System / Light / Dark directly in the settings menu, applied live and remembered between restarts
+    - every part of the UI now derives its colors from the active color scheme instead of hardcoded values, so light mode is properly readable everywhere (context menus, dialogs, tiles, tag chips)
+- fix:
+    - settings menu: the color palette dropdown no longer sits flush against the System / Light / Dark switch
+    - settings menu: the dialog body now scrolls instead of spilling past the dialog when the window is made very small
+    - renaming a module to the name of another module is now rejected with an error instead of overwriting that module's folder
+    - tag chips and filter chips now pick a readable text color based on the tag's own color instead of always assuming white text
+    - renaming a module no longer makes it jump to the end of the sidebar
+
 ## v2.2.0
 - feature:
     - rename files directly in import menu
