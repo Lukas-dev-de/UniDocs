@@ -5,7 +5,7 @@
 ; shortcut and an entry in "Apps & features" with a working uninstaller.
 ;
 ; Built by .github/workflows/release-build.yml with:
-;   ISCC.exe /DMyAppVersion=2.3.0 /DMySourceDir=<repo>\build\windows installer\unidocs.iss
+;   ISCC.exe /DMyAppVersion=2.3.0 /DMySourceDir=<repo>/build/windows installer\unidocs.iss
 ; Output: installer\Output\UniDocs-<version>-windows-x86_64-setup.exe
 ;
 ; Local test build (after `flet build windows -v`):
@@ -62,7 +62,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 
 [Files]
 ; The whole Flet bundle: unidocs.exe plus its data and runtime DLLs.
-Source: "{#MySourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#MySourceDir}/*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
