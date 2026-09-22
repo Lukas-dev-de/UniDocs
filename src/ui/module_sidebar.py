@@ -29,13 +29,7 @@ class ModuleSidebar(ft.Container):
         self._on_module_update = on_module_update
         self._theme = theme
 
-        # Drag a tile (or its handle) to rearrange the sidebar; the new order
-        # is persisted by _on_reorder.
-        self.modules_list = ft.ReorderableListView(
-            expand=True,
-            spacing=6,
-            on_reorder=self._on_reorder,
-        )
+        self.modules_list = ft.Column(scroll=ft.ScrollMode.AUTO, expand=True)
 
         self.icon_selector = IconSelector()
         self.color_selector = ColorSelector()
@@ -172,48 +166,12 @@ class ModuleSidebar(ft.Container):
 
         self._store.save_module(_module)
         self.modules_list.controls.append(self._make_tile(_module))
-        # Keep the new module where the list just put it (at the end) rather
-        # than letting it jump once the sidebar reloads.
-        self._persist_order()
 
         self.icon_selector.reset()
         self.color_selector.reset()
         self.title_field.value = ""
         self.description_field.value = ""
         self.update()
-
-    #  ordering 
-
-    @staticmethod
-    def _tile_module(control) -> Module | None:
-        """Dig the Module back out of a tile built by ``_make_tile``."""
-        return getattr(getattr(control, "content", None), "module", None)
-
-    def _persist_order(self):
-        self._store.save_order(
-            [
-                module.title
-                for module in (
-                    self._tile_module(c) for c in self.modules_list.controls
-                )
-                if module
-            ]
-        )
-
-    def _on_reorder(self, e: ft.OnReorderEvent):
-        old_index, new_index = e.old_index, e.new_index
-        if old_index is None or new_index is None or old_index == new_index:
-            return
-
-        controls = self.modules_list.controls
-        if not (0 <= old_index < len(controls) and 0 <= new_index < len(controls)):
-            return
-
-        # ReorderableListView only reports the move -- the control list itself
-        # is ours to reorder (this is the pattern from its docs).
-        controls.insert(new_index, controls.pop(old_index))
-        self.modules_list.update()
-        self._persist_order()
 
     #  context menu 
 
