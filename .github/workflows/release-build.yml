@@ -137,11 +137,13 @@ jobs:
           channel: stable
           cache: true
 
+      # No pipeline here: `pip show | head -2` makes pip die with SIGPIPE
+      # (exit 120) under GitHub's `bash -o pipefail`, which fails the step.
       - name: Show versions
         shell: bash
         run: |
           python --version
-          pip show flet-cli | head -2
+          python -c "import importlib.metadata as m; print('flet-cli', m.version('flet-cli'))"
           flutter --version
 
       # ------------------------------------------------------------------
@@ -181,13 +183,21 @@ jobs:
       # ------------------------------------------------------------------
       # Build
       # ------------------------------------------------------------------
+      # PYTHONIOENCODING/PYTHONUTF8 keep the Windows console (cp1252) from
+      # choking on the unicode Flet prints (e.g. "\u25cf"); --no-rich-output
+      # alone does not cover everything. LANG/LC_ALL do the same for the
+      # MSYS/Git Bash wrapper on the Windows runner.
       - name: Build app
         shell: bash
         env:
           TARGET: ${{ matrix.target }}
           VERSION: ${{ needs.prepare.outputs.version }}
+          PYTHONUTF8: "1"
+          PYTHONIOENCODING: "utf-8"
         run: |
           set -euo pipefail
+          export LANG=C.UTF-8
+          export LC_ALL=C.UTF-8
           flet build "$TARGET" \
             --build-version "$VERSION" \
             --build-number "$GITHUB_RUN_NUMBER" \
