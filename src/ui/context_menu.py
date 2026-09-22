@@ -49,18 +49,29 @@ class ContextMenu(ft.Stack):
         
 
     def show(self, x: float, y: float, items: list[tuple]):
+        """*items* are ``(label, icon, color, callback)`` tuples.
+
+        A ``callback`` of ``None`` renders the entry dimmed and unclickable,
+        which is how a caller shows an action that is unavailable where the
+        menu was opened ("Move up" on the module that is already first).
+        """
         self._items_col.controls.clear()
 
         for label, icon, color, cb in items:
+            enabled = cb is not None
+            # Leave the colour unset when disabled so the children inherit the
+            # button's own greyed-out foreground instead of fighting it.
+            tint = color if enabled else None
             self._items_col.controls.append(
                 ft.TextButton(
                     content=ft.Row(
                         spacing=10,
                         controls=[
-                            ft.Icon(icon, size=16, color=color),
-                            ft.Text(label, color=color, size=13),
+                            ft.Icon(icon, size=16, color=tint),
+                            ft.Text(label, color=tint, size=13),
                         ],
                     ),
+                    disabled=not enabled,
                     on_click=lambda e, fn=cb: self._select(fn),
                 )
             )
@@ -77,4 +88,5 @@ class ContextMenu(ft.Stack):
 
     def _select(self, cb):
         self.hide()
-        cb()
+        if cb is not None:
+            cb()

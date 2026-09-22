@@ -35,7 +35,7 @@ release branch so the two do not drift apart.
 - [x] feature: add colors to modules
 - [x] fix: get links to repository in settings to work 
 - [x] feature: selecting multiple files (for example with ctl+click or middle click) to apply tags or delete multiple at once
-- [ ] feature: reorganise modules order in sidebar by draging
+- [x] feature: reorganise modules order in sidebar from the right click menu (no drag n drop)
 - [ ] feature: grouping modules in sidebar
 
 #### high effort

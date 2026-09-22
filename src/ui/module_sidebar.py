@@ -152,6 +152,11 @@ class ModuleSidebar(ft.Container):
             on_secondary_tap_down=lambda e, m=module: self._show_module_menu(e, m),
         )
 
+    @staticmethod
+    def _tile_module(control) -> Module | None:
+        """Dig the Module back out of a tile built by ``_make_tile``."""
+        return getattr(getattr(control, "content", None), "module", None)
+
     def add_module(self, e: ft.ControlEvent):
         title = self.title_field.value.strip()
         if not title:
@@ -166,6 +171,9 @@ class ModuleSidebar(ft.Container):
 
         self._store.save_module(_module)
         self.modules_list.controls.append(self._make_tile(_module))
+        # Keep the new module where the list just put it (at the end) rather
+        # than letting it jump once the sidebar reloads.
+        self._persist_order()
 
         self.icon_selector.reset()
         self.color_selector.reset()
@@ -173,14 +181,65 @@ class ModuleSidebar(ft.Container):
         self.description_field.value = ""
         self.update()
 
+    #  ordering 
+
+    def _persist_order(self):
+        self._store.save_order(
+            [
+                module.title
+                for module in (
+                    self._tile_module(c) for c in self.modules_list.controls
+                )
+                if module
+            ]
+        )
+
+    def _module_index(self, module: Module) -> int | None:
+        """Position of *module* in the sidebar, or None if it is not shown."""
+        for index, control in enumerate(self.modules_list.controls):
+            tile = self._tile_module(control)
+            if tile is not None and tile.title == module.title:
+                return index
+        return None
+
+    def _move_module(self, module: Module, offset: int):
+        """Swap *module* with its neighbour above (-1) or below (+1)."""
+        controls = self.modules_list.controls
+        index = self._module_index(module)
+        if index is None:
+            return
+        target = index + offset
+        if not 0 <= target < len(controls):
+            return
+
+        controls.insert(target, controls.pop(index))
+        self.modules_list.update()
+        self._persist_order()
+
     #  context menu 
 
     def _show_module_menu(self, e: ft.TapEvent, module: Module):
+        index = self._module_index(module)
+        # A module at one end of the list gets a greyed-out entry rather than a
+        # missing one, so the menu keeps the same shape wherever it is opened.
+        move_up = (
+            (lambda m=module: self._move_module(m, -1))
+            if index is not None and index > 0
+            else None
+        )
+        move_down = (
+            (lambda m=module: self._move_module(m, +1))
+            if index is not None and index < len(self.modules_list.controls) - 1
+            else None
+        )
+
         self._ctx_menu.show(
             e.global_position.x,
             e.global_position.y,
             [
                 ("Edit", ft.Icons.EDIT_OUTLINED, ft.Colors.ON_SURFACE, lambda m=module: self._module_edit(m)),
+                ("Move up", ft.Icons.ARROW_UPWARD, ft.Colors.ON_SURFACE, move_up),
+                ("Move down", ft.Icons.ARROW_DOWNWARD, ft.Colors.ON_SURFACE, move_down),
                 ("Delete", ft.Icons.DELETE_OUTLINE, ft.Colors.ERROR, lambda m=module: self._module_delete(m)),
             ],
         )
