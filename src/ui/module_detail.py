@@ -42,6 +42,7 @@ class ModuleDetail(ft.Container):
             value="No Module Selected",
             size=32,
             weight=ft.FontWeight.BOLD,
+            overflow=ft.TextOverflow.ELLIPSIS,
         )
         self.title_field = ft.TextField(
             text_size=32,
@@ -55,6 +56,7 @@ class ModuleDetail(ft.Container):
             content=self.title_text,
             on_tap= self._start_title_edit,
             mouse_cursor=ft.MouseCursor.TEXT,
+            expand=True,
         )
 
         #  Description: text display + inline editor 
@@ -76,6 +78,7 @@ class ModuleDetail(ft.Container):
             content=self.description_text,
             on_tap=self._start_desc_edit,
             mouse_cursor=ft.MouseCursor.TEXT,
+            expand=True,
         )
 
         #  Toolbar buttons 
