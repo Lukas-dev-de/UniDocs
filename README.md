@@ -22,6 +22,28 @@ merged into `main` and tagged. Small fixes can go directly on `main`.
 If a fix lands on `main` while a release branch is still open, merge `main` back into the
 release branch so the two do not drift apart.
 
+### Cutting a release
+
+The version number is written down in three places (`pyproject.toml`, `CURRENT_VERSION` in
+`src/ui/settings_dialog.py` and the newest `## vX.Y.Z` heading in `CHANGELOG.md`).
+`tools/check_version.py` makes sure they agree, and the release build refuses to run if they
+do not.
+
+1. On `release/X.Y.Z`: set `CURRENT_VERSION` in `src/ui/settings_dialog.py` and add the
+   `## vX.Y.Z` section to `CHANGELOG.md` while you work on it.
+2. As the last commit on the branch, bump `version` in `pyproject.toml` to `X.Y.Z` and check
+   all three places:
+
+   ```bash
+   python tools/check_version.py vX.Y.Z
+   ```
+
+3. Merge `release/X.Y.Z` into `main` (keep the commits, do not squash).
+4. On GitHub: *Releases -> Draft a new release*, tag `vX.Y.Z` targeting `main`, write the
+   notes and publish. Publishing starts the `Release build` workflow, which builds every
+   platform and attaches the files to the release (see below).
+5. Merge `main` back into the next release branch.
+
 ## Stuff to implement:
 #### low effort
 - [x] add more icons for selection
@@ -69,6 +91,9 @@ uv run flet run --web
 For more details on running the app, refer to the [Getting Started Guide](https://flet.dev/docs/).
 
 ## Build the app
+
+The commands below are what CI runs for you when a release is published (see
+[Releases](#releases-automated)); use them locally for one-off builds.
 
 ### Android
 
@@ -118,3 +143,31 @@ flet build web -v
 
 For more details on building Web app, refer to the [Web Packaging Guide](https://flet.dev/docs/publish/web/).
 
+## Releases (automated)
+
+Publishing a release on GitHub triggers `.github/workflows/release-build.yml`, which builds
+and attaches these files to that release:
+
+| File | Platform |
+| --- | --- |
+| `UniDocs-linux-x86_64.zip` | Linux, extract and run `./unidocs` |
+| `UniDocs-windows-x86_64.zip` | Windows, extract and run `unidocs.exe` |
+| `UniDocs-macos-universal.zip` | macOS, extract, drag `unidocs.app` to Applications |
+| `UniDocs-web.zip` | static web build, needs to be served by a web server |
+
+Notes:
+
+- The workflow only runs on `release` events once it exists on `main`, so merge it into
+  `main` before publishing the first automated release.
+- `flet build` and the Flutter SDK version are pinned in the `env:` block of the workflow;
+  bump them together with `flet` in `pyproject.toml`.
+- Nothing is code signed. Windows shows a SmartScreen warning ("More info" -> "Run anyway")
+  and macOS blocks the app until it is allowed in *System Settings -> Privacy & Security ->
+  Open Anyway*. Flet 0.84 has no support for signing or notarizing macOS bundles yet.
+- The workflow can also be started by hand from the Actions tab to test a build without
+  creating a release.
+- A signed `.ipa` for iPad/iPhone needs an Apple Developer Program membership; that build
+  lives in `.github/workflows/ios.yml` and is manual-only.
+
+Optional extras when a build needs them: `--compile-app --compile-packages` (ship `.pyc`,
+starts faster but keeps no source around) and `--arch` for other CPU architectures.

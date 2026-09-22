@@ -40,7 +40,6 @@ class ModuleSidebar(ft.Container):
             hint_text="Description", on_submit=self.add_module
         )
 
-        ### UI-LAYOUT ###
         self.content = ft.Column(
             expand=True,
             alignment="CENTER",

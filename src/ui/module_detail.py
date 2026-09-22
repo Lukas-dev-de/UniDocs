@@ -221,7 +221,7 @@ class ModuleDetail(ft.Container):
             on_changed=self._reload_current_module,
         )
 
-        # modifer keys aren't reported on tap events, so track them globally
+        # modifier keys aren't reported on tap events, so track them globally
         try:
             self.page.on_keyboard_event = self._on_key_event
         except Exception as ex:
@@ -819,8 +819,6 @@ class ModuleDetail(ft.Container):
         # Update in-memory so the tile reflects the change immediately
         from models.tag import Tag
         doc.tags.append(Tag(tag_dict["id"], tag_dict["name"], tag_dict["color"]))
-
-        print(f"Add tag: '{tag_id}' to document '{doc.title}'")
 
         self._refresh_documents()
         self.update()

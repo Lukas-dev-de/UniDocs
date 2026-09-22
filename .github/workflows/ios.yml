@@ -1,0 +1,185 @@
+name: Build iOS (IPA)
+
+# ---------------------------------------------------------------------------
+# iPad / iPhone builds. Read this before running it.
+#
+# An iPad cannot run a zipped build like Windows or Linux does: iPadOS only
+# installs apps that carry a valid Apple signature, so this job needs an
+# Apple Developer Program membership (99 $/year) plus the credentials below.
+# That is why it is manual-only: nothing here runs until you set up the
+# secrets and start it from the Actions tab.
+#
+# Required repository secrets:
+#   IOS_CERTIFICATE_P12        base64 of the exported .p12 (cert + private key)
+#   IOS_CERTIFICATE_PASSWORD   password of that .p12
+#   IOS_KEYCHAIN_PASSWORD      any password, only used for the temp keychain
+#   IOS_PROVISIONING_PROFILE   base64 of the .mobileprovision
+#   IOS_TEAM_ID                10 character Apple team ID
+#
+# Create the base64 values on macOS with:
+#   base64 -i certificate.p12        | pbcopy
+#   base64 -i profile.mobileprovision | pbcopy
+#
+# The provisioning profile has to be a *distribution* (App Store Connect /
+# Ad Hoc) profile for the App ID de.buschauermedia.unidocs and, for Ad Hoc
+# installs, has to list the UDID of the target iPad.
+#
+# Known risk: `watchdog` is not in Flet's iOS wheel index
+# (https://flet.dev/docs/reference/binary-packages-android-ios). If the
+# dependency step fails, drop watchdog from [project] dependencies and make
+# the file watching in src/app_storage optional for mobile builds.
+#
+# Resulting .ipa can be installed with Xcode ("Devices and Simulators"),
+# Apple Configurator or, for app-store-connect exports, uploaded to App Store
+# Connect and picked up through TestFlight.
+# ---------------------------------------------------------------------------
+
+on:
+  workflow_dispatch:
+    inputs:
+      export_method:
+        description: "iOS export method"
+        type: choice
+        options:
+          - debugging
+          - release-testing
+          - app-store-connect
+        default: release-testing
+
+permissions:
+  contents: read
+
+env:
+  FLET_CLI_VERSION: "0.84.0"
+  FLUTTER_SDK_VERSION: "3.41.4"
+
+jobs:
+  build-ipa:
+    name: Build IPA
+    runs-on: macos-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Flet CLI
+        run: pip install "flet-cli==${{ env.FLET_CLI_VERSION }}"
+
+      - name: Install Flutter SDK ${{ env.FLUTTER_SDK_VERSION }}
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_SDK_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Check required secrets
+        env:
+          IOS_CERTIFICATE_P12: ${{ secrets.IOS_CERTIFICATE_P12 }}
+          IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+          IOS_KEYCHAIN_PASSWORD: ${{ secrets.IOS_KEYCHAIN_PASSWORD }}
+          IOS_PROVISIONING_PROFILE: ${{ secrets.IOS_PROVISIONING_PROFILE }}
+          IOS_TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          for name in IOS_CERTIFICATE_P12 IOS_CERTIFICATE_PASSWORD IOS_KEYCHAIN_PASSWORD \
+                      IOS_PROVISIONING_PROFILE IOS_TEAM_ID; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::secret ${name} is not set - see the header of .github/workflows/ios.yml"
+              exit 1
+            fi
+          done
+
+      - name: Import signing certificate and provisioning profile
+        env:
+          IOS_CERTIFICATE_P12: ${{ secrets.IOS_CERTIFICATE_P12 }}
+          IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+          IOS_KEYCHAIN_PASSWORD: ${{ secrets.IOS_KEYCHAIN_PASSWORD }}
+          IOS_PROVISIONING_PROFILE: ${{ secrets.IOS_PROVISIONING_PROFILE }}
+        run: |
+          set -euo pipefail
+
+          # decoded with Python: base64 option names differ between macOS and Linux
+          python3 - <<'PY' > /dev/null
+          import base64, os, pathlib
+          for var, out in (("IOS_CERTIFICATE_P12", "certificate.p12"),
+                           ("IOS_PROVISIONING_PROFILE", "profile.mobileprovision")):
+              pathlib.Path(out).write_bytes(base64.b64decode(os.environ[var]))
+          PY
+
+          security create-keychain -p "$IOS_KEYCHAIN_PASSWORD" build.keychain
+          security set-keychain-settings -lut 21600 build.keychain
+          security unlock-keychain -p "$IOS_KEYCHAIN_PASSWORD" build.keychain
+          security import certificate.p12 -k build.keychain \
+            -P "$IOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "$IOS_KEYCHAIN_PASSWORD" build.keychain
+          security list-keychains -d user -s build.keychain $(security list-keychains -d user | tr -d '"')
+
+          profile_uuid="$(security cms -D -i profile.mobileprovision \
+            | xmllint --xpath "string(//key[.='UUID']/following-sibling::string[1])" -)"
+          echo "provisioning profile UUID: $profile_uuid"
+          echo "PROFILE_UUID=$profile_uuid" >> "$GITHUB_ENV"
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          cp profile.mobileprovision \
+            "$HOME/Library/MobileDevice/Provisioning Profiles/$profile_uuid.mobileprovision"
+
+          security find-identity -v -p codesigning build.keychain
+
+      - name: Build IPA
+        env:
+          IOS_TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
+          EXPORT_METHOD: ${{ github.event.inputs.export_method }}
+        run: |
+          set -euo pipefail
+          VERSION="$(python3 tools/check_version.py)"
+          # "debugging" exports are signed with a development certificate,
+          # everything else with a distribution certificate.
+          if [ "$EXPORT_METHOD" = "debugging" ]; then
+            SIGNING_CERTIFICATE="Apple Development"
+          else
+            SIGNING_CERTIFICATE="Apple Distribution"
+          fi
+          flet build ipa \
+            --build-version "$VERSION" \
+            --build-number "$GITHUB_RUN_NUMBER" \
+            --ios-team-id "$IOS_TEAM_ID" \
+            --ios-export-method "$EXPORT_METHOD" \
+            --ios-provisioning-profile "$PROFILE_UUID" \
+            --ios-signing-certificate "$SIGNING_CERTIFICATE" \
+            --yes --no-rich-output --skip-flutter-doctor
+
+      - name: Collect the IPA
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          if find build -name '*.ipa' -type f -print -quit | grep -q .; then
+            find build -name '*.ipa' -type f -exec cp {} dist/ \;
+          else
+            # Without a usable signing identity the build exports an .xcarchive
+            # instead of an .ipa - keep it so the log is still useful.
+            ARCHIVE="$(find build -name '*.xcarchive' -print -quit)"
+            if [ -n "$ARCHIVE" ]; then
+              ditto -c -k --sequesterRsrc --keepParent "$ARCHIVE" \
+                "dist/$(basename "$ARCHIVE").zip"
+            else
+              echo "::warning::flet produced neither an .ipa nor an .xcarchive"
+            fi
+          fi
+          ls -lh dist
+
+      - name: Delete the temporary keychain
+        if: always()
+        run: |
+          security delete-keychain build.keychain || true
+          rm -f certificate.p12 profile.mobileprovision
+
+      - name: Upload the IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: UniDocs-ios
+          path: dist/
+          if-no-files-found: warn
+          retention-days: 14

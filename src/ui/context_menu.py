@@ -17,7 +17,6 @@ Usage
 
 import flet as ft
 
-# See AlertDialog for future rework
 class ContextMenu(ft.Stack):
     def __init__(self):
         super().__init__()
@@ -45,8 +44,6 @@ class ContextMenu(ft.Stack):
         )
 
         self.controls = [self.scrim, self.menu_container]
-
-        
 
     def show(self, x: float, y: float, items: list[tuple]):
         """*items* are ``(label, icon, color, callback)`` tuples.

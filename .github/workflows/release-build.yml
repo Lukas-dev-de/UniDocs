@@ -1,0 +1,264 @@
+name: Release build
+
+# Builds the installable bundles for every supported platform from a release
+# tag and attaches them to that GitHub release.
+#
+# Normal use: publish a release in the GitHub UI
+#   Releases -> "Draft a new release" -> choose/create tag vX.Y.Z targeting main
+#   -> "Publish release"
+# and this workflow takes over (it needs no secrets).
+#
+# Heads-up: GitHub only runs `release`-triggered workflows whose file already
+# exists on the default branch, so this workflow has to be merged into `main`
+# once before it can fire.
+#
+# Everything can also be started by hand from the Actions tab
+# ("Release build" -> "Run workflow") to test a build without creating a
+# release; artifacts are then only kept as workflow artifacts.
+#
+# Docs: https://flet.dev/docs/publish
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to build, e.g. v2.3.0 (empty = build the selected branch)"
+        type: string
+        required: false
+        default: ""
+      upload:
+        description: "Attach the built files to the release of that tag"
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-build-${{ github.event.release.tag_name || github.event.inputs.tag || github.ref }}
+  cancel-in-progress: false
+
+env:
+  # Both values are the pair pinned in the project; bump them together with
+  # pyproject.toml and check the required Flutter version with
+  #   python -c "import flet.version; print(flet.version.flutter_version)"
+  FLET_CLI_VERSION: "0.84.0"
+  FLUTTER_SDK_VERSION: "3.41.4"
+
+jobs:
+  # --------------------------------------------------------------------------
+  # Fail early (before any build machine is spun up) if the tag does not match
+  # the version numbers in the code.
+  # --------------------------------------------------------------------------
+  prepare:
+    name: Check version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+      tag: ${{ steps.check.outputs.tag }}
+      ref: ${{ steps.check.outputs.ref }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name || github.event.inputs.tag || github.ref }}
+          fetch-depth: 0
+
+      - name: Verify version numbers match
+        id: check
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name || github.event.inputs.tag }}
+        run: |
+          set -euo pipefail
+          if [ -n "${RELEASE_TAG}" ]; then
+            VERSION="$(python3 tools/check_version.py "${RELEASE_TAG}")"
+          else
+            VERSION="$(python3 tools/check_version.py)"
+          fi
+          echo "ref=$(git rev-parse HEAD)"     >> "$GITHUB_OUTPUT"
+          echo "tag=${RELEASE_TAG}"            >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}"            >> "$GITHUB_OUTPUT"
+          echo "### Building UniDocs ${VERSION} from $(git rev-parse --short HEAD)" >> "$GITHUB_STEP_SUMMARY"
+
+  # --------------------------------------------------------------------------
+  # One job per platform. UniDocs only uses pure Python packages, so no
+  # platform needs extra package wheels - everything is built from source on
+  # the build machine.
+  # --------------------------------------------------------------------------
+  build:
+    name: Build ${{ matrix.name }}
+    needs: prepare
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux
+            os: ubuntu-latest
+            target: linux
+            asset: UniDocs-linux-x86_64.zip
+          - name: Windows
+            os: windows-latest
+            target: windows
+            asset: UniDocs-windows-x86_64.zip
+          - name: macOS
+            os: macos-latest
+            target: macos
+            asset: UniDocs-macos-universal.zip
+          - name: Web
+            os: ubuntu-latest
+            target: web
+            asset: UniDocs-web.zip
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.ref }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Flet CLI
+        run: pip install "flet-cli==${{ env.FLET_CLI_VERSION }}"
+
+      # Installs the exact Flutter SDK Flet needs and caches it between runs.
+      # Deleting this step also works - `flet build` downloads Flutter itself
+      # on first use, it is just slower.
+      - name: Install Flutter SDK ${{ env.FLUTTER_SDK_VERSION }}
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_SDK_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Show versions
+        shell: bash
+        run: |
+          python --version
+          pip show flet-cli | head -2
+          flutter --version
+
+      # ------------------------------------------------------------------
+      # Platform prerequisites for the build machine
+      # ------------------------------------------------------------------
+      # Same package set Flet uses for its own builds. The gstreamer/libmpv
+      # packages are only needed for flet-audio/flet-video; UniDocs builds
+      # with desktop_flavor = "light", so they can be dropped if this step
+      # ever becomes a problem.
+      - name: Install Linux build dependencies
+        if: matrix.target == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            binutils clang cmake ninja-build pkg-config llvm lld \
+            libgtk-3-dev libsecret-1-dev libunwind-dev libasound2-dev libmpv-dev \
+            libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+            gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
+            gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly \
+            gstreamer1.0-libav gstreamer1.0-tools gstreamer1.0-gl \
+            gstreamer1.0-gtk3 gstreamer1.0-pulseaudio
+
+      # `flet build macos` builds a universal bundle, which for the Intel half
+      # needs Rosetta 2 on the arm64 runners.
+      - name: Install Rosetta 2
+        if: matrix.target == 'macos'
+        run: sudo softwareupdate --install-rosetta --agree-to-license || true
+
+      # Flutter refuses to build Windows projects with plugins unless symlink
+      # support is available, which needs developer mode.
+      - name: Enable Windows developer mode
+        if: matrix.target == 'windows'
+        shell: pwsh
+        run: |
+          reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock" /t REG_DWORD /f /v AllowDevelopmentWithoutDevLicense /d 1 || true
+
+      # ------------------------------------------------------------------
+      # Build
+      # ------------------------------------------------------------------
+      - name: Build app
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          set -euo pipefail
+          flet build "$TARGET" \
+            --build-version "$VERSION" \
+            --build-number "$GITHUB_RUN_NUMBER" \
+            --yes --no-rich-output --skip-flutter-doctor
+
+      # ------------------------------------------------------------------
+      # Package
+      # ------------------------------------------------------------------
+      # -y keeps the symlinks inside the bundle intact
+      - name: Package (Linux)
+        if: matrix.target == 'linux'
+        working-directory: build/linux
+        run: |
+          mkdir -p ../../dist
+          zip -r -y -q "../../dist/${{ matrix.asset }}" .
+
+      - name: Package (Windows)
+        if: matrix.target == 'windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Compress-Archive -Path build/windows/* -DestinationPath "dist/${{ matrix.asset }}" -Force
+
+      # ditto (not zip) is required for .app bundles: it keeps the symlinks,
+      # permissions and extended attributes of the bundle.
+      - name: Package (macOS)
+        if: matrix.target == 'macos'
+        run: |
+          mkdir -p dist
+          APP="$(find build/macos -maxdepth 1 -name '*.app' -print -quit)"
+          ditto -c -k --sequesterRsrc --keepParent "$APP" "dist/${{ matrix.asset }}"
+
+      - name: Package (Web)
+        if: matrix.target == 'web'
+        working-directory: build/web
+        run: |
+          mkdir -p ../../dist
+          zip -r -q "../../dist/${{ matrix.asset }}" .
+
+      - name: Show result
+        shell: bash
+        run: ls -lh dist/
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 14
+
+  # --------------------------------------------------------------------------
+  # Attach everything to the release that triggered the workflow.
+  # Nothing is signed or notarized, see README for what users should expect.
+  # --------------------------------------------------------------------------
+  publish:
+    name: Attach files to release
+    needs: [prepare, build]
+    if: github.event_name == 'release' || github.event.inputs.upload == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Upload assets to GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          set -euo pipefail
+          ls -lh dist
+          gh release upload "$TAG" dist/* --clobber
+          gh release view "$TAG" --json assets \
+            --jq '.assets[] | "\(.name)  (\(.size) bytes)"'

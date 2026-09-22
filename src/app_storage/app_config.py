@@ -13,7 +13,7 @@ config.json example
 
 Usage
 -----
-    from storage.app_config import AppConfig
+    from app_storage.app_config import AppConfig
 
     cfg = AppConfig()
     cfg.unidocs_location          # → Path

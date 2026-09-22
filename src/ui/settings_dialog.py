@@ -76,6 +76,10 @@ class SettingsDialog(ft.AlertDialog):
 
         #  LAYOUT 
         self.modal = True
+        # Let Material wrap title + content in a scroll view, so that on a short
+        # window the body scrolls instead of overflowing past the dialog (and
+        # the window) while the buttons stay visible.
+        self.scrollable = True
 
         self.title = ft.Row(
             spacing=8,
@@ -104,6 +108,9 @@ class SettingsDialog(ft.AlertDialog):
                     self._section(
                         "Appearance",
                         self._mode_selector,
+                        # The palette dropdown floats its label above the field,
+                        # so it needs extra room below the mode selector.
+                        ft.Container(height=12, bgcolor=ft.Colors.TRANSPARENT),
                         self._palette_dropdown,
                         ft.Text(
                             "Changes apply instantly and are saved.",
@@ -201,7 +208,6 @@ class SettingsDialog(ft.AlertDialog):
 
         new_path = Path(raw).expanduser().resolve()
 
-        # basic validation
         if new_path == self._store.root:
             self.open = False
             self.update()
@@ -216,7 +222,6 @@ class SettingsDialog(ft.AlertDialog):
         # persist to config.json so the path survives restarts
         self._cfg.unidocs_location = new_path
 
-        # commit to live store
         self._store.root = new_path
         self._status.value = ""
         self.open = False

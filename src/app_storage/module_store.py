@@ -1,5 +1,5 @@
 """
-storage/module_store.py
+app_storage/module_store.py
 -----------------------
 Filesystem-backed persistence for Module objects.
 
