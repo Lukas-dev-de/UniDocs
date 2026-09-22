@@ -1,6 +1,7 @@
 import flet as ft
 from ui.components.module_tile import ModuleTile
 from ui.components.icon_selector import IconSelector
+from ui.components.color_selector import ColorSelector
 from ui.settings_dialog import SettingsDialog
 from ui.context_menu import ContextMenu
 from models.module import Module
@@ -23,6 +24,7 @@ class ModuleSidebar(ft.Container):
         self.modules_list = ft.Column(scroll=ft.ScrollMode.AUTO, expand=True)
 
         self.icon_selector = IconSelector()
+        self.color_selector = ColorSelector()
         self.title_field = ft.TextField(
             hint_text="New Module", on_submit=self.add_module, expand=True
         )
@@ -41,7 +43,11 @@ class ModuleSidebar(ft.Container):
                     items=[
                         ft.PopupMenuItem(
                             content=ft.Row(
-                                controls=[self.icon_selector, self.title_field]
+                                controls=[
+                                    self.icon_selector,
+                                    self.color_selector,
+                                    self.title_field,
+                                ]
                             ),
                             padding=8,
                         ),
@@ -143,12 +149,14 @@ class ModuleSidebar(ft.Container):
             title=title,
             description=self.description_field.value,
             icon=self.icon_selector.value or ft.Icons.FOLDER,
+            color=self.color_selector.value,
         )
 
         self._store.save_module(_module)
         self.modules_list.controls.append(self._make_tile(_module))
 
         self.icon_selector.reset()
+        self.color_selector.reset()
         self.title_field.value = ""
         self.description_field.value = ""
         self.update()

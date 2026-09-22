@@ -2,6 +2,7 @@
 
 ## v2.3.0
 - new:
+    - modules can be given an accent color, shown on their tile in the sidebar; modules without one keep following the theme as before
     - custom themes: pick from 5 color palettes (UniDocs Blue, Nord, Dracula, Solarized, Monochrome) and switch between System / Light / Dark directly in the settings menu, applied live and remembered between restarts
     - every part of the UI now derives its colors from the active color scheme instead of hardcoded values, so light mode is properly readable everywhere (context menus, dialogs, tiles, tag chips)
 - fix:

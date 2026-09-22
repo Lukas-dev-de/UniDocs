@@ -28,6 +28,7 @@ from flet.messaging.protocol import (  # noqa: E402
 
 from app_storage.app_config import AppConfig  # noqa: E402
 from app_storage.module_store import ModuleStore  # noqa: E402
+from ui.components.color_selector import ColorSelector  # noqa: E402
 from ui.theme import PALETTES, ThemeManager  # noqa: E402
 from ui.module_detail import ModuleDetail  # noqa: E402
 from ui.module_sidebar import ModuleSidebar  # noqa: E402
@@ -64,6 +65,18 @@ with tempfile.TemporaryDirectory() as tmp:
     (root / "School" / "notes.txt").write_text("hello", encoding="utf-8")
     module = store._load_module(store._folder_for(module)) or module
 
+    # A module with an accent colour, written and re-read from disk.
+    colored = Module(
+        title="Physics",
+        description="Lectures",
+        icon=ft.Icons.SCIENCE,
+        color="#1A5FB4",
+    )
+    store.save_module(colored)
+    colored = store._load_module(store._folder_for(colored)) or colored
+    assert colored.color == "#1A5FB4", f"colour did not round-trip: {colored.color!r}"
+    assert module.color is None, f"uncoloured module gained a colour: {module.color!r}"
+
     theme = ThemeManager(cfg)
 
     print("building widgets:")
@@ -79,7 +92,17 @@ with tempfile.TemporaryDirectory() as tmp:
     pack("ModuleDetail", detail)
     pack("SettingsDialog", dialog)
     pack("module tile", sidebar._make_tile(module) if sidebar.modules_list is not None else None)
+    pack("colored module tile", sidebar._make_tile(colored))
     pack("settings overlay list", ft.Column([dialog]))
+
+    # Colour picker in both states (nothing chosen / a swatch chosen).
+    print("colour selector:")
+    picker = ColorSelector()
+    pack("ColorSelector (empty)", picker)
+    picker.set_value("#2E7D32")
+    pack("ColorSelector (selected)", picker)
+    picker.reset()
+    assert picker.value is None
 
     # Exercise the appearance controls through their full value range.
     print("appearance controls across palettes/modes:")

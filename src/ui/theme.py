@@ -89,6 +89,29 @@ def on_color(background: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# module accent colours
+# ---------------------------------------------------------------------------
+
+# Swatches offered for a module colour. Deliberately mid-tone so text stays
+# readable on a coloured tile in both appearances; ``on_color`` picks the
+# foreground per swatch. Same (label, value) shape as the icon list.
+MODULE_COLORS: list[tuple[str, str]] = [
+    ("Blue", "#1A5FB4"),
+    ("Teal", "#00838F"),
+    ("Green", "#2E7D32"),
+    ("Amber", "#F9A825"),
+    ("Orange", "#EF6C00"),
+    ("Deep Orange", "#D84315"),
+    ("Red", "#C62828"),
+    ("Pink", "#AD1457"),
+    ("Purple", "#6A1B9A"),
+    ("Deep Purple", "#4527A0"),
+    ("Blue Grey", "#546E7A"),
+    ("Brown", "#4E342E"),
+]
+
+
+# ---------------------------------------------------------------------------
 # palette definitions
 # ---------------------------------------------------------------------------
 

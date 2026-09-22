@@ -8,7 +8,7 @@ Layout
 UniDocs/
 ├ tags.json              ← global tag registry: [{"id": "<uuid>", "name": "...", "color": "..."}, ...]
 ├ Physics 101/
-│   ├ .meta              ← JSON: {"description": "...", "icon": "SCIENCE"}
+│   ├ .meta              ← JSON: {"description": "...", "icon": "SCIENCE", "color": "#1A5FB4"}
 │   ├ .doc_tags          ← {"lecture.pdf": ["<uuid1>", "<uuid2>"], ...}  (tag IDs, not names)
 │   └ lecture.pdf
 └ Math/
@@ -341,6 +341,8 @@ class ModuleStore:
             title=folder.name,
             description=meta.get("description", ""),
             icon=_name_to_icon(icon_name),
+            # Absent (or null) for modules created before v2.3.0 → follows theme.
+            color=meta.get("color") or None,
         )
 
         # build id→Tag lookup from the live global registry
@@ -370,6 +372,7 @@ class ModuleStore:
         meta = {
             "description": module.description,
             "icon": _icon_to_name(module.icon or _DEFAULT_ICON_NAME),
+            "color": module.color,
         }
         (folder / META_FILENAME).write_text(
             json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8"

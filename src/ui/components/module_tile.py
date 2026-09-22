@@ -1,5 +1,6 @@
 import flet as ft
 from models.module import Module
+from ui.theme import on_color
 
 @ft.control
 class ModuleTile(ft.IconButton):
@@ -11,7 +12,12 @@ class ModuleTile(ft.IconButton):
         self.align = ft.Alignment.CENTER
         
         self.border_radius = 8
-        self.bgcolor = ft.Colors.PRIMARY_CONTAINER
+        self.bgcolor = module.color or ft.Colors.PRIMARY_CONTAINER
+        # A module without a colour follows the theme; with a colour, that colour
+        # becomes the tile background and the foreground is derived from it.
+        foreground = (
+            on_color(module.color) if module.color else ft.Colors.ON_PRIMARY_CONTAINER
+        )
         self.icon = module.icon
         self.tooltip = module.title
         self.on_click = self._handle_click 
@@ -21,9 +27,14 @@ class ModuleTile(ft.IconButton):
             content=ft.Column(
                 expand=True,
                 controls=[
-                    ft.Icon(module.icon, size=48),
-                    ft.Text(value=module.title, size=24, weight=ft.FontWeight.BOLD),
-                    ft.Text(value=module.description, size=14, color=ft.Colors.ON_PRIMARY_CONTAINER),
+                    ft.Icon(module.icon, size=48, color=foreground),
+                    ft.Text(
+                        value=module.title,
+                        size=24,
+                        weight=ft.FontWeight.BOLD,
+                        color=foreground,
+                    ),
+                    ft.Text(value=module.description, size=14, color=foreground),
                 ],
             ),
         )
