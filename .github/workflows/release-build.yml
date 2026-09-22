@@ -104,6 +104,8 @@ jobs:
             os: windows-latest
             target: windows
             asset: UniDocs-windows-x86_64.zip
+            # The Windows job also produces UniDocs-<version>-windows-x86_64-setup.exe
+            # (see "Build Windows installer" below); both files end up in dist/.
           - name: macOS
             os: macos-latest
             target: macos
@@ -208,6 +210,29 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path dist | Out-Null
           Compress-Archive -Path build/windows/* -DestinationPath "dist/${{ matrix.asset }}" -Force
+
+      # ------------------------------------------------------------------
+      # Windows installer (Inno Setup)
+      # ------------------------------------------------------------------
+      # `flet build windows` only produces a portable folder, so wrap it into a
+      # real installer: Start Menu entry, optional desktop shortcut and an
+      # uninstaller in "Apps & features". Inno Setup is preinstalled on the
+      # Windows runners; the fallback install keeps this working if that ever
+      # changes. Nothing is code signed, so SmartScreen still complains.
+      - name: Build Windows installer
+        if: matrix.target == 'windows'
+        shell: pwsh
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup -y --no-progress
+            $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          }
+          $sourceDir = Join-Path $PWD 'build\windows'
+          & $iscc "/DMyAppVersion=$env:VERSION" "/DMySourceDir=$sourceDir" "installer\unidocs.iss"
+          Copy-Item "installer\Output\UniDocs-$env:VERSION-windows-x86_64-setup.exe" dist\
 
       # ditto (not zip) is required for .app bundles: it keeps the symlinks,
       # permissions and extended attributes of the bundle.

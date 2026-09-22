@@ -164,6 +164,9 @@ cython_debug/
 # Flet
 storage/
 
+# Inno Setup output
+installer/Output/
+
 #config
 config.json
 

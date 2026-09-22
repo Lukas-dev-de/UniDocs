@@ -135,6 +135,15 @@ flet build windows -v
 
 For more details on building Windows package, refer to the [Windows Packaging Guide](https://flet.dev/docs/publish/windows/).
 
+This only produces the portable folder `build/windows/`. The release workflow wraps that folder
+into a real installer with [Inno Setup](https://jrsoftware.org/isinfo.php) (`installer/unidocs.iss`),
+which adds a Start Menu entry, a desktop shortcut and an uninstaller in *Apps & features*.
+To test it locally after the build above:
+
+```bash
+"C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer/unidocs.iss
+```
+
 ### Web
 
 ```bash
@@ -151,7 +160,8 @@ and attaches these files to that release:
 | File | Platform |
 | --- | --- |
 | `UniDocs-linux-x86_64.zip` | Linux, extract and run `./unidocs` |
-| `UniDocs-windows-x86_64.zip` | Windows, extract and run `unidocs.exe` |
+| `UniDocs-windows-x86_64.zip` | Windows, portable: extract and run `unidocs.exe` |
+| `UniDocs-<version>-windows-x86_64-setup.exe` | Windows installer, see below |
 | `UniDocs-macos-universal.zip` | macOS, extract, drag `unidocs.app` to Applications |
 | `UniDocs-web.zip` | static web build, needs to be served by a web server |
 
@@ -161,9 +171,14 @@ Notes:
   `main` before publishing the first automated release.
 - `flet build` and the Flutter SDK version are pinned in the `env:` block of the workflow;
   bump them together with `flet` in `pyproject.toml`.
+- The Windows installer (`installer/unidocs.iss`) installs per user by default, so it needs no
+  admin rights and lands in `%LOCALAPPDATA%\Programs\UniDocs`; an admin gets a dialog to install
+  for all users instead. It shows a desktop shortcut task (checked by default) and registers an
+  uninstaller in *Apps & features*. Upgrades replace the previous install (fixed `AppId`).
 - Nothing is code signed. Windows shows a SmartScreen warning ("More info" -> "Run anyway")
-  and macOS blocks the app until it is allowed in *System Settings -> Privacy & Security ->
-  Open Anyway*. Flet 0.84 has no support for signing or notarizing macOS bundles yet.
+  for both the portable zip and the installer, and macOS blocks the app until it is allowed in
+  *System Settings -> Privacy & Security -> Open Anyway*. Flet 0.84 has no support for signing
+  or notarizing macOS bundles yet.
 - The workflow can also be started by hand from the Actions tab to test a build without
   creating a release.
 - A signed `.ipa` for iPad/iPhone needs an Apple Developer Program membership; that build

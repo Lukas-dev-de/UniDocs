@@ -2,6 +2,7 @@
 
 ## v2.3.0
 - new:
+    - Windows releases now also ship a real installer next to the portable zip: it adds a Start Menu entry, an (optional) desktop shortcut and an uninstaller in "Apps & features", and needs no admin rights
     - modules can be given an accent color, shown on their tile in the sidebar; modules without one keep following the theme as before
     - modules can be edited from the sidebar context menu (right click): title, description, icon and color in one dialog
     - modules can be moved up and down from the sidebar context menu (right click); the arrangement is remembered in a .order file next to tags.json
