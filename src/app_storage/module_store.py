@@ -113,6 +113,17 @@ class ModuleStore:
             old_folder.rename(new_folder)
         module.title = new_title
 
+    def rename_conflict(self, module: Module, new_title: str) -> bool:
+        """True if renaming *module* to *new_title* would hit another module.
+
+        Renaming to a title that maps onto the module's own folder (say, one
+        that only differs by a character ``_safe_name`` strips) is not a
+        conflict. Callers should check this before ``rename_module``, which
+        would otherwise silently clobber the other folder.
+        """
+        target = self.root / _safe_name(new_title)
+        return target != self._folder_for(module) and target.exists()
+
     # -- document CRUD --------------------------------------------------------
 
     def add_document(self, module: Module, src_path: Path) -> Document:

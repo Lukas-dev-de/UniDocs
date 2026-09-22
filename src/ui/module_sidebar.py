@@ -2,6 +2,7 @@ import flet as ft
 from ui.components.module_tile import ModuleTile
 from ui.components.icon_selector import IconSelector
 from ui.components.color_selector import ColorSelector
+from ui.components.module_edit_dialog import ModuleEditDialog
 from ui.settings_dialog import SettingsDialog
 from ui.context_menu import ContextMenu
 from models.module import Module
@@ -15,10 +16,17 @@ class ModuleSidebar(ft.Container):
     border_radius: int = 16
     bgcolor: ft.Colors = ft.Colors.SURFACE
 
-    def __init__(self, store: ModuleStore, on_module_select=None, theme: ThemeManager | None = None):
+    def __init__(
+        self,
+        store: ModuleStore,
+        on_module_select=None,
+        on_module_update=None,
+        theme: ThemeManager | None = None,
+    ):
         super().__init__()
         self._store = store
         self._on_module_select = on_module_select
+        self._on_module_update = on_module_update
         self._theme = theme
 
         self.modules_list = ft.Column(scroll=ft.ScrollMode.AUTO, expand=True)
@@ -80,6 +88,10 @@ class ModuleSidebar(ft.Container):
         )
 
         self._ctx_menu = ContextMenu()
+        self._edit_dialog = ModuleEditDialog(
+            store=self._store,
+            on_saved=self._on_module_edited,
+        )
 
         # Delete confirm dialog
         self._delete_label = ft.Text("")
@@ -102,7 +114,7 @@ class ModuleSidebar(ft.Container):
             actions_alignment=ft.MainAxisAlignment.END,
         )
 
-        for item in (self._settings_dialog, self._ctx_menu, self._delete_dialog):
+        for item in (self._settings_dialog, self._ctx_menu, self._delete_dialog, self._edit_dialog):
             self.page.overlay.append(item)
         self.page.update()
 
@@ -110,7 +122,7 @@ class ModuleSidebar(ft.Container):
         page = self.page
         if page is None:
             return
-        for item in (self._settings_dialog, self._ctx_menu, self._delete_dialog):
+        for item in (self._settings_dialog, self._ctx_menu, self._delete_dialog, self._edit_dialog):
             if hasattr(self, "_settings_dialog") and item in page.overlay:
                 page.overlay.remove(item)
 
@@ -168,6 +180,7 @@ class ModuleSidebar(ft.Container):
             e.global_position.x,
             e.global_position.y,
             [
+                ("Edit", ft.Icons.EDIT_OUTLINED, ft.Colors.ON_SURFACE, lambda m=module: self._module_edit(m)),
                 ("Delete", ft.Icons.DELETE_OUTLINE, ft.Colors.ERROR, lambda m=module: self._module_delete(m)),
             ],
         )
@@ -190,6 +203,19 @@ class ModuleSidebar(ft.Container):
             self._delete_confirm_cb()
 
     #  module actions 
+
+    def _module_edit(self, module: Module):
+        self._edit_dialog.open_for(module)
+
+    def _on_module_edited(self, module: Module, previous_title: str | None):
+        """Re-render the sidebar, and let the detail view refresh itself.
+
+        ``previous_title`` is what the module was called before the edit, so
+        the detail view can tell whether *it* was the module being edited.
+        """
+        self._reload_and_update()
+        if self._on_module_update:
+            self._on_module_update(module, previous_title)
 
     def _module_delete(self, module: Module):
         def on_confirm():

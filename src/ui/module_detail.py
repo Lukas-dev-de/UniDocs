@@ -288,6 +288,12 @@ class ModuleDetail(ft.Container):
             self.update()
             return
         if new_title != self.module.title:
+            if self._store.rename_conflict(self.module, new_title):
+                # Refuse rather than clobber the other module's folder.
+                self._show_title_text(self.module.title)
+                self.update()
+                self.show_error(f'Another module is already called "{new_title}".')
+                return
             try:
                 self._store.rename_module(self.module, new_title)
             except Exception as ex:

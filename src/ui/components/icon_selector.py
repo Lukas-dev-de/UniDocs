@@ -302,6 +302,16 @@ class IconSelector(ft.Container):
         self._trigger_container.update()
         self._refresh_grid()
 
+    def set_value(self, icon_value=None):
+        """Show *icon_value* as the selection without firing ``on_change``."""
+        self._selected = icon_value
+        self._selected_icon_display.name = icon_value or ft.Icons.STAR
+        try:
+            self._trigger_container.update()
+        except RuntimeError:
+            pass
+        self._refresh_grid()
+
     @property
     def icon(self) -> str | None:
         return self._selected

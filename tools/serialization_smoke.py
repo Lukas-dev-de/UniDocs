@@ -29,6 +29,7 @@ from flet.messaging.protocol import (  # noqa: E402
 from app_storage.app_config import AppConfig  # noqa: E402
 from app_storage.module_store import ModuleStore  # noqa: E402
 from ui.components.color_selector import ColorSelector  # noqa: E402
+from ui.components.module_edit_dialog import ModuleEditDialog  # noqa: E402
 from ui.theme import PALETTES, ThemeManager  # noqa: E402
 from ui.module_detail import ModuleDetail  # noqa: E402
 from ui.module_sidebar import ModuleSidebar  # noqa: E402
@@ -103,6 +104,13 @@ with tempfile.TemporaryDirectory() as tmp:
     pack("ColorSelector (selected)", picker)
     picker.reset()
     assert picker.value is None
+
+    # Module editor, populated from a real module.
+    print("module edit dialog:")
+    edit_dialog = ModuleEditDialog(store=store, on_saved=lambda m, p: None)
+    edit_dialog.update = lambda *a, **k: None  # no page in this test
+    edit_dialog.open_for(colored)
+    pack("ModuleEditDialog", edit_dialog)
 
     # Exercise the appearance controls through their full value range.
     print("appearance controls across palettes/modes:")
