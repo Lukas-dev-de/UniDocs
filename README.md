@@ -146,11 +146,12 @@ To test it locally after the build above:
 
 ### Web
 
-```bash
-flet build web -v
-```
-
-For more details on building Web app, refer to the [Web Packaging Guide](https://flet.dev/docs/publish/web/).
+There is no web build, and the release workflow does not make one. `flet build web`
+resolves dependencies for Pyodide and fails on `watchdog`, which the app needs for its
+filesystem watcher (`src/app_storage/module_store.py`) and which has no wheel there.
+UniDocs is local-first anyway: the storage folder, the watcher and "open document" all
+belong on the machine that runs the Python side, not in a browser tab. `flet run --web`
+still works for local development, where that Python side runs on your machine.
 
 ## Releases (automated)
 
@@ -163,7 +164,6 @@ and attaches these files to that release:
 | `UniDocs-windows-x86_64.zip` | Windows, portable: extract and run `unidocs.exe` |
 | `UniDocs-<version>-windows-x86_64-setup.exe` | Windows installer, see below |
 | `UniDocs-macos-universal.zip` | macOS, extract, drag `unidocs.app` to Applications |
-| `UniDocs-web.zip` | static web build, needs to be served by a web server |
 
 Notes:
 

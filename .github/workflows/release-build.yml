@@ -1,7 +1,8 @@
 name: Release build
 
-# Builds the installable bundles for every supported platform from a release
-# tag and attaches them to that GitHub release.
+# Builds the installable bundles for every supported desktop platform from a
+# release tag and attaches them to that GitHub release. There is no web bundle,
+# see the "Web" section in the README for why.
 #
 # Normal use: publish a release in the GitHub UI
 #   Releases -> "Draft a new release" -> choose/create tag vX.Y.Z targeting main
@@ -110,10 +111,12 @@ jobs:
             os: macos-latest
             target: macos
             asset: UniDocs-macos-universal.zip
-          - name: Web
-            os: ubuntu-latest
-            target: web
-            asset: UniDocs-web.zip
+          # No Web target. `flet build web` resolves dependencies for Pyodide,
+          # and watchdog (the filesystem watcher behind the app's auto-refresh,
+          # see src/app_storage/module_store.py) has no wheel for it, so the job
+          # dies in "No matching distribution found for watchdog>=6.0.0".
+          # The app is local-first anyway: storage folder, watcher and "open
+          # document" all run on the machine that runs the Python side.
 
     steps:
       - uses: actions/checkout@v4
@@ -252,13 +255,6 @@ jobs:
           mkdir -p dist
           APP="$(find build/macos -maxdepth 1 -name '*.app' -print -quit)"
           ditto -c -k --sequesterRsrc --keepParent "$APP" "dist/${{ matrix.asset }}"
-
-      - name: Package (Web)
-        if: matrix.target == 'web'
-        working-directory: build/web
-        run: |
-          mkdir -p ../../dist
-          zip -r -q "../../dist/${{ matrix.asset }}" .
 
       - name: Show result
         shell: bash
