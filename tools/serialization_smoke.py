@@ -34,6 +34,9 @@ from ui.theme import PALETTES, ThemeManager  # noqa: E402
 from ui.module_detail import ModuleDetail  # noqa: E402
 from ui.module_sidebar import ModuleSidebar  # noqa: E402
 from ui.settings_dialog import SettingsDialog  # noqa: E402
+from ui.update_prompt import UpdatePrompt  # noqa: E402
+
+import updater  # noqa: E402
 
 encode = configure_encode_object_for_msgpack(BaseControl)
 
@@ -85,6 +88,14 @@ with tempfile.TemporaryDirectory() as tmp:
     detail = ModuleDetail(store=store)
     dialog = SettingsDialog(store=store, theme=theme)
 
+    # The silent patch install is a Windows-only thing, so the switch must not
+    # sit at "on" (and lie) anywhere else.
+    if updater.can_self_update():
+        assert dialog._auto_patch_switch.disabled is False
+    else:
+        assert dialog._auto_patch_switch.value is False, "switch promises a Windows-only feature"
+        assert dialog._auto_patch_switch.disabled is True
+
     dialog._mode_selector.selected = [theme.mode]
     dialog._palette_dropdown.value = theme.palette_id
 
@@ -111,6 +122,24 @@ with tempfile.TemporaryDirectory() as tmp:
     edit_dialog.update = lambda *a, **k: None  # no page in this test
     edit_dialog.open_for(colored)
     pack("ModuleEditDialog", edit_dialog)
+
+    # Update popup in all three flavours: asking, silently installing,
+    # and "this release has no download for your system".
+    print("update prompt:")
+    release = updater.Release(
+        version="2.4.0",
+        tag="v2.4.0",
+        notes="",
+        page_url="https://example.invalid/v2.4.0",
+        assets={"UniDocs-2.4.0-windows-x86_64-setup.exe": "https://example.invalid/setup"},
+    )
+    asset = next(iter(release.assets.items()))
+    pack("UpdatePrompt (asking)", UpdatePrompt(release, asset))
+    pack(
+        "UpdatePrompt (silent patch)",
+        UpdatePrompt(release, asset, kind="patch", install_now=True),
+    )
+    pack("UpdatePrompt (no asset)", UpdatePrompt(release, None))
 
     # Exercise the appearance controls through their full value range.
     print("appearance controls across palettes/modes:")

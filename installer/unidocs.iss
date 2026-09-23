@@ -68,5 +68,9 @@ Source: "{#MySourceDir}/*"; DestDir: "{app}"; Flags: ignoreversion recursesubdir
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
+;
+; No `skipifsilent` here on purpose: the in-app updater runs the setup with
+; /SILENT, and that run is exactly the one that has to bring the app back up
+; afterwards.
 [Run]
-Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall

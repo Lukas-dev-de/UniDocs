@@ -2,7 +2,9 @@ import flet as ft
 from pathlib import Path
 from app_storage.module_store import ModuleStore
 from app_storage.app_config import AppConfig
+import updater
 from ui.theme import MODE_LABELS, PALETTES, ThemeManager
+from ui.update_install import UpdateInstaller
 
 CURRENT_VERSION = "2.3.0"
 
@@ -26,6 +28,7 @@ class SettingsDialog(ft.AlertDialog):
     ---------
         on_location_change(new_path: Path)
             Fired when the user confirms a new UniDocs location.
+            
             The caller is responsible for reloading the store / sidebar.
     """
 
@@ -46,6 +49,81 @@ class SettingsDialog(ft.AlertDialog):
         )
 
         self._status = ft.Text("", color=ft.Colors.ERROR, size=12)
+
+        #  update check 
+        # The whole update state lives in these few controls: the check runs in
+        # a background thread and only ever writes into them.
+        self._update_release: updater.Release | None = None
+        self._update_asset: tuple[str, str] | None = None
+
+        self._check_button = ft.FilledButton(
+            "Check for updates",
+            icon=ft.Icons.SYSTEM_UPDATE_ALT,
+            on_click=self._check_for_updates,
+        )
+        self._update_progress = ft.ProgressRing(
+            width=16, height=16, stroke_width=2, visible=False
+        )
+        self._update_status = ft.Text(
+            "", size=12, color=ft.Colors.ON_SURFACE_VARIANT
+        )
+
+        # Only one of the two download buttons is ever visible: the installer
+        # route is Windows-only, everywhere else the browser gets the archive.
+        self._install_button = ft.FilledButton(
+            "Download and install",
+            icon=ft.Icons.DOWNLOAD,
+            visible=False,
+            on_click=self._download_and_install,
+        )
+        self._download_button = ft.FilledButton(
+            "Download",
+            icon=ft.Icons.DOWNLOAD,
+            visible=False,
+            url=RELEASES_URL,
+        )
+        self._notes_button = ft.TextButton(
+            "Release notes",
+            icon=ft.Icons.DESCRIPTION,
+            visible=False,
+            url=RELEASES_URL,
+        )
+        self._update_actions = ft.Row(
+            spacing=8,
+            visible=False,
+            wrap=True,
+            controls=[
+                self._install_button,
+                self._download_button,
+                self._notes_button,
+            ],
+        )
+
+        # Download + restart-in-place is shared with the startup popup.
+        self._installer = UpdateInstaller(
+            self._update_status,
+            on_busy=self._install_busy,
+            on_failed=self._install_failed,
+        )
+
+        # Patch releases (2.3.0 -> 2.3.1) are installed on startup without
+        # asking. Only the Windows installer build can replace itself, so
+        # everywhere else the switch sits at "off" and greyed out instead of
+        # promising something that will not happen.
+        self._can_self_update = updater.can_self_update()
+        self._auto_patch_switch = ft.Switch(
+            label="Install patches automatically",
+            value=self._cfg.auto_install_patches and self._can_self_update,
+            on_change=self._on_auto_patch_change,
+            disabled=not self._can_self_update,
+        )
+        self._auto_patch_note = ft.Text(
+            "Patch releases such as 2.3.0 → 2.3.1 are installed quietly on startup."
+            if self._can_self_update
+            else "Only available in the Windows installer version.",
+            size=12,
+            color=ft.Colors.ON_SURFACE_VARIANT,
+        )
 
         #  appearance controls 
         self._mode_selector = ft.SegmentedButton(
@@ -121,6 +199,21 @@ class SettingsDialog(ft.AlertDialog):
 
                     ft.Divider(height=1),
 
+                    # Update check
+                    self._section(
+                        "Updates",
+                        ft.Row(
+                            spacing=8,
+                            controls=[self._check_button, self._update_progress],
+                        ),
+                        self._update_status,
+                        self._update_actions,
+                        self._auto_patch_switch,
+                        self._auto_patch_note,
+                    ),
+
+                    ft.Divider(height=1),
+
                     # About / links
                     self._section(
                         "About",
@@ -189,6 +282,7 @@ class SettingsDialog(ft.AlertDialog):
         self._sync_mode_selector()
         self._sync_palette_dropdown()
         self._status.value = ""
+        self._reset_update_section()
         self.open = True
         self.update()
 
@@ -232,4 +326,119 @@ class SettingsDialog(ft.AlertDialog):
 
     def _show_error(self, msg: str):
         self._status.value = msg
+        self.update()
+
+    #  update check 
+    #
+    # Layout: one click -> ``_check_for_updates`` (UI thread) puts the section
+    # into "checking" and hands the actual network call to ``page.run_thread``.
+    # The worker never touches the widgets itself; it posts back with
+    # ``page.run_task``, so every UI write happens on the page's event loop.
+
+    def _reset_update_section(self) -> None:
+        """Back to the idle state (also called on every ``show()``)."""
+        self._update_release = None
+        self._update_asset = None
+        self._set_update_busy(False)
+        self._update_status.value = ""
+        self._update_status.color = ft.Colors.ON_SURFACE_VARIANT
+        self._update_actions.visible = False
+        self._auto_patch_switch.value = (
+            self._cfg.auto_install_patches and self._can_self_update
+        )
+
+    def _on_auto_patch_change(self, e) -> None:
+        if not self._can_self_update:
+            return
+        self._cfg.auto_install_patches = bool(self._auto_patch_switch.value)
+
+    def _set_update_busy(self, busy: bool) -> None:
+        self._check_button.disabled = busy
+        self._update_progress.visible = busy
+        if busy:
+            self._update_actions.visible = False
+
+    def _set_update_status(self, message: str, *, error: bool = False) -> None:
+        self._update_status.value = message
+        self._update_status.color = (
+            ft.Colors.ERROR if error else ft.Colors.ON_SURFACE_VARIANT
+        )
+
+    def _check_for_updates(self, e):
+        self._set_update_busy(True)
+        self._set_update_status("Checking for updates…")
+        self.update()
+        self.page.run_thread(self._check_worker)
+
+    # -- worker (background thread) -----------------------------------------
+
+    def _check_worker(self) -> None:
+        try:
+            release = updater.fetch_latest()
+        except updater.UpdateError as ex:
+            self.page.run_task(self._show_check_result, None, str(ex))
+            return
+        self.page.run_task(self._show_check_result, release, None)
+
+    # -- results (event loop) -----------------------------------------------
+
+    async def _show_check_result(self, release, error) -> None:
+        self._set_update_busy(False)
+
+        if error:
+            self._set_update_status(f"Could not check for updates: {error}", error=True)
+            self.update()
+            return
+
+        try:
+            newer = updater.is_newer(release.version, CURRENT_VERSION)
+        except updater.UpdateError as ex:
+            self._set_update_status(f"Could not read the released version: {ex}", error=True)
+            self.update()
+            return
+
+        if not newer:
+            self._set_update_status(
+                f"UniDocs {CURRENT_VERSION} is the latest version."
+            )
+            self.update()
+            return
+
+        self._update_release = release
+        self._update_asset = updater.asset_for(release)
+
+        note = "" if self._update_asset else " (no download for this system)"
+        self._set_update_status(
+            f"Version {release.version} is available — you have {CURRENT_VERSION}.{note}"
+        )
+        self._notes_button.url = release.page_url
+        self._notes_button.visible = True
+
+        if updater.can_install_asset(self._update_asset):
+            self._install_button.visible = True
+        elif self._update_asset:
+            self._download_button.url = self._update_asset[1]
+            self._download_button.visible = True
+
+        self._update_actions.visible = True
+        self.update()
+
+    # -- install ------------------------------------------------------------
+
+    def _download_and_install(self, e):
+        """Windows only: fetch the setup and let it replace this install."""
+        if self._update_asset:
+            self._installer.start(self._update_asset[1])
+
+    #  called by the shared installer 
+
+    def _install_busy(self, busy: bool) -> None:
+        self._set_update_busy(busy)
+        if not busy:
+            # The install can only fail when it is over, so the buttons have to
+            # come back for a retry.
+            self._update_actions.visible = True
+
+    def _install_failed(self, message: str) -> None:
+        self._set_update_status(f"Update failed: {message}", error=True)
         self.update()

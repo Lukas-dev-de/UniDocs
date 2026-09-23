@@ -62,6 +62,7 @@ do not.
 
 #### high effort
 - [x] feature: implement custom themes 
+- [x] feature: update check in the settings menu, patch releases install themselves on startup (and self-updating on Windows)
 - [ ] feature: file syncing (for example via self-hosting, github or googledrive ...)
 
 

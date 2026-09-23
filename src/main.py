@@ -2,6 +2,7 @@ import flet as ft
 from ui.module_detail import ModuleDetail
 from ui.module_sidebar import ModuleSidebar
 from ui.theme import ThemeManager
+from ui.update_prompt import StartupUpdateCheck
 from app_storage.module_store import ModuleStore
 from app_storage.app_config import AppConfig
 
@@ -44,6 +45,10 @@ def main(page: ft.Page):
             ),
         ),
     )
+
+    # Asks GitHub in the background: silent for patch releases, at most one popup
+    # per version otherwise (see ui.update_prompt).
+    StartupUpdateCheck(page, cfg).start()
 
 
 if __name__ == "__main__":
