@@ -115,8 +115,11 @@ check("linux capable", updater.platform_can_self_update("Linux"), True)
 check("macos not capable", updater.platform_can_self_update("Darwin"), False)
 
 print("this copy can replace itself:")
-# This script runs from source (``flet run``), where sys.executable is a plain
-# interpreter - never a frozen flet bundle, never an AppImage.
+# Windows is always replaceable: the setup carries a fixed AppId. On Linux the
+# check looks at *this* copy, and this script runs from source (``flet run``),
+# where sys.executable is a plain interpreter - never a bundle, never an
+# AppImage.
+check("windows setup build", updater.can_self_update("Windows"), True)
 check("running from source", updater.can_self_update("Linux"), False)
 check("not an AppImage", updater.is_appimage(), False)
 check("macos", updater.can_self_update("Darwin"), False)

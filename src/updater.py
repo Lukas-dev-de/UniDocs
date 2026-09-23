@@ -306,9 +306,10 @@ def platform_can_self_update(system: str | None = None) -> bool:
 def location_is_replaceable(system: str | None = None) -> bool:
     """True when the *currently running* copy may overwrite itself.
 
-    Only matters on Linux: an AppImage can always be overwritten, a folder
-    install only when it really is a bundle the user may write to. Running from
-    source (``flet run``) is never replaceable.
+    Linux only, and only asked from there (see ``can_self_update``): an AppImage
+    can always be overwritten, a folder install only when it really is a bundle
+    the user may write to. Running from source (``flet run``) is never
+    replaceable.
     """
     if (system or platform.system()).lower() != "linux":
         return False
@@ -319,8 +320,18 @@ def location_is_replaceable(system: str | None = None) -> bool:
 
 
 def can_self_update(system: str | None = None) -> bool:
-    """True when UniDocs can install its own update instead of just downloading."""
-    return platform_can_self_update(system) and location_is_replaceable(system)
+    """True when UniDocs can install its own update instead of just downloading.
+
+    Windows: yes, the Inno Setup installer carries a fixed AppId and replaces
+    the running install in place, wherever it lives. Linux: only when this copy
+    can really be overwritten, see ``location_is_replaceable``. macOS: no.
+    """
+    system = (system or platform.system()).lower()
+    if not platform_can_self_update(system):
+        return False
+    if system == "linux":
+        return location_is_replaceable(system)
+    return True
 
 
 def can_install_asset(asset: tuple[str, str] | None, system: str | None = None) -> bool:
