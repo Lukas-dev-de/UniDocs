@@ -1,3 +1,6 @@
-flet
+# Keep in sync with pyproject.toml: the bundled flet must match the flet-cli
+# version used by `flet build`, otherwise client and Python protocol differ
+# and the app window stays blank.
+flet==0.84.0
 watchdog
 platformdirs

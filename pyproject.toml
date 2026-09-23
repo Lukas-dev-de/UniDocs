@@ -7,17 +7,24 @@ requires-python = ">=3.10"
 authors = [
     { name = "Lukas Buschauer", email = "lukas.buschauer@gmail.com" }
 ]
+# Exact flet pins, no ranges. The bundled Python flet MUST have the same
+# version as the client shell, and `flet build` takes the shell from the
+# flet-cli version (see FLET_CLI_VERSION in .github/workflows/release-build.yml).
+# flet 1.0 changed the socket wire format (4-byte length prefix + type byte
+# instead of a raw msgpack stream), so a mismatched pair talks past each other
+# and the app window stays blank. Bump all four pins together with the
+# workflow env values, never just one.
 dependencies = [
-    "flet>=0.84.0",
+    "flet==0.84.0",
     "watchdog>=6.0.0",
     "platformdirs>=4.9.6",
 ]
 
 [dependency-groups]
 dev = [
-    "flet-cli>=0.84.0",
-    "flet-desktop>=0.84.0",
-    "flet-web>=0.84.0",
+    "flet-cli==0.84.0",
+    "flet-desktop==0.84.0",
+    "flet-web==0.84.0",
 ]
 
 [tool.flet]
