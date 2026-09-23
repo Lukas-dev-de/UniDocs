@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## Unreleased
+## v2.4.0
 - new:
     - settings menu: "Check for updates" button. It asks the GitHub releases of this repo for the newest version and says whether you are up to date or a newer one is out
     - UniDocs looks for a new release once per start, quietly in the background. Patch releases (2.3.0 -> 2.3.1) install themselves and the app restarts into the new version

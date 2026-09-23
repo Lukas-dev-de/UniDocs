@@ -6,7 +6,7 @@ import updater
 from ui.theme import MODE_LABELS, PALETTES, ThemeManager
 from ui.update_install import UpdateInstaller
 
-CURRENT_VERSION = "2.3.0"
+CURRENT_VERSION = "2.4.0"
 
 REPO_URL = "https://github.com/Lukas-dev-de/UniDocs"
 RELEASES_URL = f"{REPO_URL}/releases"
