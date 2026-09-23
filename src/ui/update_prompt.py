@@ -6,7 +6,8 @@ The update dialog at startup.
 ``StartupUpdateCheck`` asks GitHub once per app start, in the background:
 
     patch release (2.3.0 -> 2.3.1) and "install patches automatically" is on
-        -> install it silently, no question asked (Windows installer build)
+        -> install it silently, no question asked (installed builds: Windows
+           setup, Linux install.sh / AppImage)
     anything else
         -> one popup, and only one: the version is remembered in config.json
            (``seen_update``), so a dismissed update never shows up again on the
@@ -38,8 +39,9 @@ def current_version() -> str:
         UNIDOCS_FAKE_VERSION=2.3.0-rc1 .venv/bin/flet run  # 2.3.0 looks like a patch
 
     In VS Code the "Python: Unidocs (update popup)" launch config does the
-    same. The patch variant only installs itself on Windows; everywhere else
-    the "Download" button just opens the browser.
+    Same. The patch variant only installs itself where UniDocs can replace
+    itself (Windows setup, Linux install.sh / AppImage); everywhere else the
+    "Download" button just opens the browser.
     """
     return os.environ.get("UNIDOCS_FAKE_VERSION", "").strip() or CURRENT_VERSION
 
@@ -66,7 +68,7 @@ class UpdatePrompt(ft.AlertDialog):
         current = current or current_version()
         self._asset = asset
         self._install_now = install_now
-        self._self_update = updater.can_install_asset(asset)
+        self._self_update = updater.can_install_asset(asset) and updater.can_self_update()
 
         self._status = ft.Text("", size=12, color=ft.Colors.ON_SURFACE_VARIANT)
         self._ring = ft.ProgressRing(
@@ -126,8 +128,8 @@ class UpdatePrompt(ft.AlertDialog):
                     ft.Text(
                         "UniDocs closes, installs the update and starts itself again."
                         if self._self_update
-                        else "The download opens in your browser; unpack it over your "
-                        "current UniDocs folder.",
+                        else "The download opens in your browser: unpack it over your "
+                        "UniDocs folder, or replace your .AppImage with it.",
                         size=12,
                         color=ft.Colors.ON_SURFACE_VARIANT,
                     )
@@ -217,6 +219,7 @@ class StartupUpdateCheck:
             kind == "patch"
             and self._cfg.auto_install_patches
             and updater.can_install_asset(asset)
+            and updater.can_self_update()
         )
         self._page.run_task(self._offer, release, asset, kind, auto)
 

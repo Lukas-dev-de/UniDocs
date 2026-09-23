@@ -100,7 +100,9 @@ jobs:
           - name: Linux
             os: ubuntu-latest
             target: linux
-            asset: UniDocs-linux-x86_64.zip
+            asset: UniDocs-linux-x86_64.tar.gz
+            # The Linux job also produces UniDocs-linux-x86_64.AppImage and
+            # install.sh (see "Package (Linux)" / "Build AppImage" below).
           - name: Windows
             os: windows-latest
             target: windows
@@ -209,13 +211,28 @@ jobs:
       # ------------------------------------------------------------------
       # Package
       # ------------------------------------------------------------------
-      # -y keeps the symlinks inside the bundle intact
+      # Linux ships a .tar.gz of the bundle (plus install.sh) instead of a zip:
+      # install.sh is tar-based, and the in-app updater unpacks the archive over
+      # the install folder. The icon rides along inside the archive so
+      # install.sh can drop it into the user's icon theme without a second
+      # download.
       - name: Package (Linux)
         if: matrix.target == 'linux'
-        working-directory: build/linux
         run: |
-          mkdir -p ../../dist
-          zip -r -y -q "../../dist/${{ matrix.asset }}" .
+          set -euo pipefail
+          mkdir -p dist
+          cp installer/icon.png build/linux/unidocs.png
+          tar -czf "dist/${{ matrix.asset }}" -C build/linux .
+          cp installer/install.sh dist/install.sh
+          chmod +x dist/install.sh
+
+      # Single-file alternative to install.sh: no install, just download and
+      # chmod +x. The layout glue lives in installer/build_appimage.sh.
+      - name: Build AppImage (Linux)
+        if: matrix.target == 'linux'
+        run: |
+          set -euo pipefail
+          ./installer/build_appimage.sh build/linux dist/UniDocs-linux-x86_64.AppImage
 
       - name: Package (Windows)
         if: matrix.target == 'windows'

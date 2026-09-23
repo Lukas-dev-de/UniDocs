@@ -77,8 +77,9 @@ class AppConfig:
     def auto_install_patches(self) -> bool:
         """Install patch releases (2.3.0 -> 2.3.1) on startup without asking.
 
-        Only ever acted on where UniDocs can install itself, i.e. the Windows
-        installer build; see ``updater.can_self_update``.
+        Only ever acted on where UniDocs can install itself: the Windows
+        setup, the Linux install.sh build and the AppImage; see
+        ``updater.can_self_update``.
         """
         return bool(self._data.get("auto_install_patches", True))
 

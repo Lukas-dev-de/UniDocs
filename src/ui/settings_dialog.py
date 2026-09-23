@@ -68,8 +68,9 @@ class SettingsDialog(ft.AlertDialog):
             "", size=12, color=ft.Colors.ON_SURFACE_VARIANT
         )
 
-        # Only one of the two download buttons is ever visible: the installer
-        # route is Windows-only, everywhere else the browser gets the archive.
+        # Only one of the two download buttons is ever visible: where UniDocs can
+        # replace itself (Windows installer, Linux install.sh / AppImage) the
+        # button installs in place, everywhere else the browser gets the archive.
         self._install_button = ft.FilledButton(
             "Download and install",
             icon=ft.Icons.DOWNLOAD,
@@ -107,9 +108,10 @@ class SettingsDialog(ft.AlertDialog):
         )
 
         # Patch releases (2.3.0 -> 2.3.1) are installed on startup without
-        # asking. Only the Windows installer build can replace itself, so
-        # everywhere else the switch sits at "off" and greyed out instead of
-        # promising something that will not happen.
+        # asking. Only an install that can replace itself may do that: on
+        # macOS, and on Linux when running from source or a read-only folder,
+        # the switch sits at "off" and greyed out instead of promising
+        # something that will not happen.
         self._can_self_update = updater.can_self_update()
         self._auto_patch_switch = ft.Switch(
             label="Install patches automatically",
@@ -120,7 +122,8 @@ class SettingsDialog(ft.AlertDialog):
         self._auto_patch_note = ft.Text(
             "Patch releases such as 2.3.0 → 2.3.1 are installed quietly on startup."
             if self._can_self_update
-            else "Only available in the Windows installer version.",
+            else "Only available in the installed builds (Windows setup, Linux "
+            "install.sh / AppImage).",
             size=12,
             color=ft.Colors.ON_SURFACE_VARIANT,
         )
@@ -414,7 +417,7 @@ class SettingsDialog(ft.AlertDialog):
         self._notes_button.url = release.page_url
         self._notes_button.visible = True
 
-        if updater.can_install_asset(self._update_asset):
+        if updater.can_install_asset(self._update_asset) and updater.can_self_update():
             self._install_button.visible = True
         elif self._update_asset:
             self._download_button.url = self._update_asset[1]
@@ -426,7 +429,7 @@ class SettingsDialog(ft.AlertDialog):
     # -- install ------------------------------------------------------------
 
     def _download_and_install(self, e):
-        """Windows only: fetch the setup and let it replace this install."""
+        """Fetch the update and let it replace this install (then restart)."""
         if self._update_asset:
             self._installer.start(self._update_asset[1])
 

@@ -70,7 +70,8 @@ release = updater.Release(
     assets={
         "UniDocs-2.4.0-windows-x86_64-setup.exe": "https://example.invalid/win-setup",
         "UniDocs-windows-x86_64.zip": "https://example.invalid/win-zip",
-        "UniDocs-linux-x86_64.zip": "https://example.invalid/linux-zip",
+        "UniDocs-linux-x86_64.tar.gz": "https://example.invalid/linux-tar",
+        "UniDocs-linux-x86_64.AppImage": "https://example.invalid/linux-appimage",
         "UniDocs-macos-universal.zip": "https://example.invalid/macos-zip",
     },
 )
@@ -81,23 +82,60 @@ check(
     updater.asset_for(release, "Windows")[0],
     "UniDocs-2.4.0-windows-x86_64-setup.exe",
 )
-check("linux", updater.asset_for(release, "Linux")[0], "UniDocs-linux-x86_64.zip")
+check(
+    "linux folder install takes the tarball",
+    updater.asset_for(release, "Linux", appimage=False)[0],
+    "UniDocs-linux-x86_64.tar.gz",
+)
+check(
+    "linux AppImage takes the AppImage",
+    updater.asset_for(release, "Linux", appimage=True)[0],
+    "UniDocs-linux-x86_64.AppImage",
+)
 check("macos", updater.asset_for(release, "Darwin")[0], "UniDocs-macos-universal.zip")
 check("unknown os", updater.asset_for(release, "FreeBSD"), None)
 check("no assets", updater.asset_for(updater.Release("1.0.0", "v1.0.0", "", "", {}), "Windows"), None)
 
+# Older releases only had a zip for Linux; a folder install must still take it
+# over the AppImage (and the updater then falls back to the browser).
+zip_only = updater.Release(
+    version="2.3.0",
+    tag="v2.3.0",
+    notes="",
+    page_url="",
+    assets={"UniDocs-linux-x86_64.zip": "https://example.invalid/linux-zip"},
+)
+check("linux zip fallback", updater.asset_for(zip_only, "Linux", appimage=False)[0],
+      "UniDocs-linux-x86_64.zip")
+check("no AppImage in release", updater.asset_for(zip_only, "Linux", appimage=True), None)
+
 print("self-update platform gate:")
-check("windows", updater.can_self_update("Windows"), True)
-check("linux", updater.can_self_update("Linux"), False)
+check("windows capable", updater.platform_can_self_update("Windows"), True)
+check("linux capable", updater.platform_can_self_update("Linux"), True)
+check("macos not capable", updater.platform_can_self_update("Darwin"), False)
+
+print("this copy can replace itself:")
+# This script runs from source (``flet run``), where sys.executable is a plain
+# interpreter - never a frozen flet bundle, never an AppImage.
+check("running from source", updater.can_self_update("Linux"), False)
+check("not an AppImage", updater.is_appimage(), False)
+check("macos", updater.can_self_update("Darwin"), False)
 
 print("can UniDocs install this asset itself:")
 SETUP_EXE = ("UniDocs-2.4.0-windows-x86_64-setup.exe", "https://example.invalid/win-setup")
 WINDOWS_ZIP = ("UniDocs-windows-x86_64.zip", "https://example.invalid/win-zip")
+LINUX_TAR = ("UniDocs-linux-x86_64.tar.gz", "https://example.invalid/linux-tar")
+LINUX_TGZ = ("UniDocs-linux-x86_64.tgz", "https://example.invalid/linux-tgz")
+LINUX_APPIMAGE = ("UniDocs-linux-x86_64.AppImage", "https://example.invalid/linux-appimage")
 LINUX_ZIP = ("UniDocs-linux-x86_64.zip", "https://example.invalid/linux-zip")
 check("windows setup", updater.can_install_asset(SETUP_EXE, "Windows"), True)
 check("windows zip", updater.can_install_asset(WINDOWS_ZIP, "Windows"), False)
-check("linux zip", updater.can_install_asset(LINUX_ZIP, "Linux"), False)
+check("linux tarball", updater.can_install_asset(LINUX_TAR, "Linux"), True)
+check("linux tgz", updater.can_install_asset(LINUX_TGZ, "Linux"), True)
+check("linux AppImage", updater.can_install_asset(LINUX_APPIMAGE, "Linux"), True)
+check("linux old zip", updater.can_install_asset(LINUX_ZIP, "Linux"), False)
 check("linux setup file", updater.can_install_asset(SETUP_EXE, "Linux"), False)
+check("macos", updater.can_install_asset(LINUX_TAR, "Darwin"), False)
 check("no asset", updater.can_install_asset(None, "Windows"), False)
 
 # -- download ----------------------------------------------------------------
@@ -105,7 +143,7 @@ check("no asset", updater.can_install_asset(None, "Windows"), False)
 print("download:")
 with tempfile.TemporaryDirectory() as tmp:
     payload = b"unidocs" * 5000
-    source = Path(tmp) / "UniDocs-linux-x86_64.zip"
+    source = Path(tmp) / "UniDocs-linux-x86_64.tar.gz"
     source.write_bytes(payload)
 
     seen: list[tuple[int, int]] = []

@@ -62,7 +62,7 @@ do not.
 
 #### high effort
 - [x] feature: implement custom themes 
-- [x] feature: update check in the settings menu, patch releases install themselves on startup (and self-updating on Windows)
+- [x] feature: update check in the settings menu, patch releases install themselves on startup (and self-updating on Windows and Linux)
 - [ ] feature: file syncing (for example via self-hosting, github or googledrive ...)
 
 
@@ -128,6 +128,20 @@ flet build linux -v
 
 For more details on building Linux package, refer to the [Linux Packaging Guide](https://flet.dev/docs/publish/linux/).
 
+The release workflow packs this into two shapes: a `.tar.gz` of the whole bundle (that is what
+`install.sh` and the in-app updater use) and an `AppImage`. `installer/build_appimage.sh` does
+the AppImage ([appimagetool](https://github.com/AppImage/appimagetool) plus the AppDir layout)
+and can be run locally:
+
+```bash
+cp installer/icon.png build/linux/unidocs.png
+tar -czf dist/UniDocs-linux-x86_64.tar.gz -C build/linux .
+./installer/build_appimage.sh build/linux dist/UniDocs-linux-x86_64.AppImage
+```
+
+Both shapes carry `installer/icon.png` as `unidocs.png`, so the menu entry has an icon. Neither
+bundles GTK 3 - it is expected on the machine, see [Installing on Linux](#installing-on-linux).
+
 ### Windows
 
 ```bash
@@ -161,7 +175,9 @@ and attaches these files to that release:
 
 | File | Platform |
 | --- | --- |
-| `UniDocs-linux-x86_64.zip` | Linux, extract and run `./unidocs` |
+| `install.sh` | Linux, per-user install into `~/.local`, see below |
+| `UniDocs-linux-x86_64.tar.gz` | Linux, portable: extract and run `./unidocs` |
+| `UniDocs-linux-x86_64.AppImage` | Linux, single file: `chmod +x` and run it |
 | `UniDocs-windows-x86_64.zip` | Windows, portable: extract and run `unidocs.exe` |
 | `UniDocs-<version>-windows-x86_64-setup.exe` | Windows installer, see below |
 | `UniDocs-macos-universal.zip` | macOS, extract, drag `unidocs.app` to Applications |
@@ -187,3 +203,31 @@ Notes:
 
 Optional extras when a build needs them: `--compile-app --compile-packages` (ship `.pyc`,
 starts faster but keeps no source around) and `--arch` for other CPU architectures.
+
+### Installing on Linux
+
+`installer/install.sh` installs UniDocs for the current user only - no root, nothing outside
+`$HOME`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Lukas-dev-de/UniDocs/main/installer/install.sh | bash
+```
+
+It unpacks the release archive into `~/.local/share/unidocs`, links `~/.local/bin/unidocs`,
+and drops an icon plus a menu entry. `./install.sh v2.4.0` installs a specific tag,
+`./install.sh --uninstall` removes it again (your documents are untouched).
+
+The alternative is the `AppImage`: download, `chmod +x`, run it. Because the AppImage is one
+file, its in-app updater ("Install now", automatic patches) replaces that file; the same goes
+for the `install.sh` build, where the updater unpacks the new archive over
+`~/.local/share/unidocs`. Running from source (`flet run`) never replaces anything - there it
+just opens the download in the browser, like macOS does.
+
+If the AppImage does not start, it is almost always the missing `libfuse.so.2`: Ubuntu 22.04
+and newer ship FUSE 3 only, so install `libfuse2` (`sudo apt install libfuse2`) or start it
+once with `./UniDocs-linux-x86_64.AppImage --appimage-extract-and-run`. UniDocs itself does not
+need the FUSE mount, that is purely how AppImages unpack on startup.
+
+UniDocs needs the GTK 3 runtime, which every normal desktop already has. It is deliberately
+not bundled into the archive or the AppImage (`flet build linux` produces a module rather than
+a self-contained bundle, see [the Flet Linux guide](https://flet.dev/docs/publish/linux/)).

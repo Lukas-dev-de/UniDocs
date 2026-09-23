@@ -88,12 +88,13 @@ with tempfile.TemporaryDirectory() as tmp:
     detail = ModuleDetail(store=store)
     dialog = SettingsDialog(store=store, theme=theme)
 
-    # The silent patch install is a Windows-only thing, so the switch must not
-    # sit at "on" (and lie) anywhere else.
+    # The silent patch install only works where UniDocs can replace itself
+    # (Windows setup, Linux install.sh / AppImage). Running from source that is
+    # never the case, so the switch must not sit at "on" (and lie).
     if updater.can_self_update():
         assert dialog._auto_patch_switch.disabled is False
     else:
-        assert dialog._auto_patch_switch.value is False, "switch promises a Windows-only feature"
+        assert dialog._auto_patch_switch.value is False, "switch promises a self-update that cannot happen"
         assert dialog._auto_patch_switch.disabled is True
 
     dialog._mode_selector.selected = [theme.mode]

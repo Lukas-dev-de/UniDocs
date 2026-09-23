@@ -6,10 +6,13 @@
     - UniDocs looks for a new release once per start, quietly in the background. Patch releases (2.3.0 -> 2.3.1) install themselves and the app restarts into the new version
     - bigger updates (new features, 2.4.0) show up once as a popup: "Install now" or "Later". The same version never pops up a second time - installing it later is always possible from the settings
     - settings: switch "Install patches automatically" to turn the silent patch install off
-    - on Linux and macOS the buttons hand the newer archive over to the browser (no self-update there, the zips are portable)
+    - Linux: releases ship an `install.sh` and a `.tar.gz` instead of a plain zip. `install.sh` sets UniDocs up for the current user only (no root): app in `~/.local/share/unidocs`, `unidocs` on the `PATH`, icon and menu entry, `--uninstall` takes it away again
+    - Linux: releases also ship a single-file `.AppImage` (chmod +x and run)
+    - Linux finally updates itself too: both the `install.sh` build and the AppImage install patch releases on startup and have an "Install now" button, just like the Windows setup. The old zip could not
 - change:
     - the Windows installer also starts UniDocs again after a silent install, which is what the in-app updater relies on
     - config.json: several instances of the settings can no longer write over each other's keys
+    - on macOS the update buttons still hand the archive over to the browser: a portable `.app` zip cannot replace itself
 
 ## v2.3.0
 - new:
