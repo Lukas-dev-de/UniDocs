@@ -46,6 +46,9 @@ PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
 ; Deliberately no ArchitecturesAllowed line: that keyword set changed in Inno
 ; Setup 6.3 and the release runner may ship an older version.
+; Setup.exe icon. Inno needs a real .ico; installer/icon.ico is generated
+; from src/assets/icon.png (see README, "App icon").
+SetupIconFile=icon.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 OutputDir=Output
 OutputBaseFilename=UniDocs-{#MyAppVersion}-windows-x86_64-setup

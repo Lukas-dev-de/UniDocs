@@ -96,6 +96,25 @@ For more details on running the app, refer to the [Getting Started Guide](https:
 The commands below are what CI runs for you when a release is published (see
 [Releases](#releases-automated)); use them locally for one-off builds.
 
+### App icon
+
+`src/assets/icon.png` (512x512) is the single source. `flet build` picks it up
+for every platform (`icon_linux.png`, `icon_windows.png`, `icon_macos.png`,
+each falling back to `icon.png`) and embeds it into the bundle, so the built app
+shows it without any code. The installers need their own copy:
+
+- `installer/icon.png` - same image, used by the Linux packaging (the `unidocs.png`
+  in the `.tar.gz` that `install.sh` installs) and by `installer/build_appimage.sh`.
+- `installer/icon.ico` - the Windows `setup.exe` icon; Inno Setup needs a real
+  `.ico`, `installer/unidocs.iss` points at it via `SetupIconFile`.
+
+After replacing the icon, copy it over and regenerate the `.ico`:
+
+```bash
+cp src/assets/icon.png installer/icon.png
+python -c "from PIL import Image; Image.open('installer/icon.png').convert('RGBA').save('installer/icon.ico', format='ICO', sizes=[(16,16),(32,32),(48,48),(64,64),(128,128),(256,256)])"
+```
+
 ### Android
 
 ```bash

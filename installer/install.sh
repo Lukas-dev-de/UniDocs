@@ -7,7 +7,7 @@
 #   ~/.local/share/unidocs                                  the app itself
 #   ~/.local/bin/unidocs                                     symlink to the launcher
 #   ~/.local/share/applications/unidocs.desktop              menu entry
-#   ~/.local/share/icons/hicolor/256x256/apps/unidocs.png    icon
+#   ~/.local/share/icons/hicolor/512x512/apps/unidocs.png    icon
 #
 # Usage:
 #   ./install.sh                                install / update to the newest release
@@ -31,7 +31,7 @@ INSTALL_DIR="${UNIDOCS_DIR:-$HOME/.local/share/unidocs}"
 BIN_DIR="${XDG_BIN_HOME:-$HOME/.local/bin}"
 DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
 APPS_DIR="$DATA_HOME/applications"
-ICON_DIR="$DATA_HOME/icons/hicolor/256x256/apps"
+ICON_DIR="$DATA_HOME/icons/hicolor/512x512/apps"
 
 die() { printf 'error: %s\n' "$1" >&2; exit 1; }
 info() { printf '  %s\n' "$1"; }
