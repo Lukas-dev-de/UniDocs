@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## v2.4.1
+- change:
+    - new app icon, used for the window, the desktop entry and the Windows installer
+
 ## v2.4.0
 - new:
     - settings menu: "Check for updates" button. It asks the GitHub releases of this repo for the newest version and says whether you are up to date or a newer one is out
