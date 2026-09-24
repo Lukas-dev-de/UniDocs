@@ -1,6 +1,6 @@
 [project]
 name = "unidocs"
-version = "2.4.0" # keep in sync with src/ui/settings_dialog.py and CHANGELOG.md - see tools/check_version.py
+version = "2.4.1" # keep in sync with src/ui/settings_dialog.py and CHANGELOG.md - see tools/check_version.py
 description = "Document management and productivity application"
 readme = "README.md"
 requires-python = ">=3.10"
