@@ -43,17 +43,14 @@ class ImportDialog(ft.AlertDialog):
         # original filename → display name (stem only, or full name typed by user)
         self._display_names: dict[str, str] = {}
 
-        #  module dropdown 
+        #  module dropdown (fills the width via the column's STRETCH) 
         self._module_dropdown = ft.Dropdown(
             label="Target module",
             hint_text="Select a module…",
-            expand=True,
             on_select=self._on_module_changed,
         )
 
         #  file list display 
-        self._file_list = ft.Column(spacing=4, tight=True)
-
         self._no_files_text = ft.Text(
             "No files selected.",
             size=12,
@@ -61,10 +58,26 @@ class ImportDialog(ft.AlertDialog):
             italic=True,
         )
 
+        self._file_list = ft.Column(spacing=4, tight=True)
+
+        self._file_list_container = ft.Container(
+            border=ft.Border.all(1, ft.Colors.OUTLINE_VARIANT),
+            border_radius=8,
+            padding=10,
+            height=48,
+            content=ft.Column(
+                spacing=4,
+                scroll=ft.ScrollMode.AUTO,
+                controls=[self._file_list, self._no_files_text],
+            ),
+        )
+
         self._status = ft.Text("", color=ft.Colors.ERROR, size=12)
 
         #  layout 
         self.modal = True
+        # hug the content and sit at the top of the window, not in the middle
+        self.alignment = ft.Alignment.TOP_CENTER
         self.title = ft.Row(
             spacing=8,
             controls=[
@@ -76,25 +89,24 @@ class ImportDialog(ft.AlertDialog):
         self.content = ft.Container(
             width=520,
             content=ft.Column(
+                # keep the fields packed: the dialog hugs its content
                 tight=True,
+                alignment=ft.MainAxisAlignment.START,
                 spacing=16,
+                horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
                 controls=[
                     self._module_dropdown,
-                    ft.Button(
-                        "Choose files…",
-                        icon=ft.Icons.FOLDER_OPEN,
-                        on_click=self._pick_files,
+                    ft.Row(
+                        alignment=ft.MainAxisAlignment.START,
+                        controls=[
+                            ft.Button(
+                                "Choose files…",
+                                icon=ft.Icons.FOLDER_OPEN,
+                                on_click=self._pick_files,
+                            ),
+                        ],
                     ),
-                    ft.Container(
-                        border=ft.Border.all(1, ft.Colors.OUTLINE_VARIANT),
-                        border_radius=8,
-                        padding=10,
-                        content=ft.Column(
-                            tight=True,
-                            spacing=4,
-                            controls=[self._file_list, self._no_files_text],
-                        ),
-                    ),
+                    self._file_list_container,
                     self._status,
                 ],
             ),
@@ -161,8 +173,10 @@ class ImportDialog(ft.AlertDialog):
         self._file_list.controls.clear()
         if not self._picked_files:
             self._no_files_text.visible = True
+            self._resize_file_list_container(0)
             return
         self._no_files_text.visible = False
+        self._resize_file_list_container(len(self._picked_files))
         for f in self._picked_files:
             display = self._display_names.get(f.name, Path(f.name).stem)
 
@@ -219,6 +233,14 @@ class ImportDialog(ft.AlertDialog):
                     ],
                 )
             )
+
+    _FILE_ROW_HEIGHT = 44   # one row incl. spacing
+    _FILE_LIST_MAX_HEIGHT = 420   # beyond that the list scrolls
+
+    def _resize_file_list_container(self, rows: int):
+        """Grow with the rows, but stop at a max height (then it scrolls)."""
+        needed = 16 + rows * self._FILE_ROW_HEIGHT if rows else 40
+        self._file_list_container.height = min(needed, self._FILE_LIST_MAX_HEIGHT)
 
     async def _start_rename(
         self,
