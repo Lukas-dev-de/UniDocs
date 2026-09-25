@@ -328,7 +328,7 @@ class IconSelector(ft.Container):
 
     def _set_display(self, icon_value: str | None) -> None:
         self._selected = icon_value
-        self._selected_icon_display.name = icon_value or ft.Icons.STAR
+        self._selected_icon_display.icon = icon_value or ft.Icons.STAR
         self._safe_update(self._trigger)
 
     #  search + grid rendering 
@@ -418,7 +418,7 @@ class IconSelector(ft.Container):
 
     def reset(self, default: str = ft.Icons.STAR) -> None:
         self._set_display(None)
-        self._selected_icon_display.name = default
+        self._selected_icon_display.icon = default
         self._safe_update(self._trigger)
 
     @property
