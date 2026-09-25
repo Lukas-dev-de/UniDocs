@@ -1,6 +1,8 @@
 # CHANGELOG
 
 ## Unreleased
+- new:
+    - import dialog: select files and assign tags to them before importing, through the same tag dialog used in the detail view
 - change:
     - import dialog: the file list sits at the bottom of the dialog, grows with the number of files and scrolls once it gets tall, so a big import no longer pushes the dialog off screen
     - import dialog: the dialog hugs its content and opens at the top of the window instead of floating in the middle
