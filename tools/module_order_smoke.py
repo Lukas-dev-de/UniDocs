@@ -14,6 +14,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+import flet as ft
+
 SRC_DIR = Path(__file__).resolve().parent.parent / "src"
 sys.path.insert(0, str(SRC_DIR))
 
@@ -46,8 +48,6 @@ def headless(sidebar: ModuleSidebar) -> None:
     """Neutralise the calls that need a real page."""
     sidebar.update = lambda *a, **k: None  # type: ignore[method-assign]
     sidebar.modules_list.update = lambda *a, **k: None  # type: ignore[method-assign]
-    for selector in (sidebar.icon_selector, sidebar.color_selector):
-        selector.reset = lambda *a, **k: None  # type: ignore[method-assign]
 
 
 def fresh_store() -> ModuleStore:
@@ -177,9 +177,7 @@ def test_add_module_goes_last() -> None:
     sidebar._move_module(sidebar._tile_module(sidebar.modules_list.controls[0]), +2)
     assert titles(sidebar) == ["Math", "Physics", "Chemistry"], titles(sidebar)
 
-    sidebar.title_field.value = "Biology"
-    sidebar.description_field.value = ""
-    sidebar.add_module(None)
+    sidebar._on_create_module("Biology", "", ft.Icons.FOLDER, None)
     assert titles(sidebar) == ["Math", "Physics", "Chemistry", "Biology"], titles(sidebar)
     assert store.load_order() == ["Math", "Physics", "Chemistry", "Biology"]
     assert displayed(store) == ["Math", "Physics", "Chemistry", "Biology"], displayed(store)
@@ -191,9 +189,7 @@ def test_order_survives_sanitised_titles() -> None:
     store = fresh_store()
     sidebar = make_sidebar(store)
 
-    sidebar.title_field.value = "Physics: Intro"
-    sidebar.description_field.value = ""
-    sidebar.add_module(None)
+    sidebar._on_create_module("Physics: Intro", "", ft.Icons.FOLDER, None)
     assert store.load_order() == [
         "Chemistry",
         "Math",

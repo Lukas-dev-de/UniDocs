@@ -1,7 +1,6 @@
 import flet as ft
 from ui.components.module_tile import ModuleTile
-from ui.components.icon_selector import IconSelector
-from ui.components.color_selector import ColorSelector
+from ui.components.module_create_dialog import ModuleCreateDialog
 from ui.components.module_edit_dialog import ModuleEditDialog
 from ui.settings_dialog import SettingsDialog
 from ui.context_menu import ContextMenu
@@ -31,38 +30,14 @@ class ModuleSidebar(ft.Container):
 
         self.modules_list = ft.Column(scroll=ft.ScrollMode.AUTO, expand=True)
 
-        self.icon_selector = IconSelector()
-        self.color_selector = ColorSelector()
-        self.title_field = ft.TextField(
-            hint_text="New Module", on_submit=self.add_module, expand=True
-        )
-        self.description_field = ft.TextField(
-            hint_text="Description", on_submit=self.add_module
-        )
-
         self.content = ft.Column(
             expand=True,
             alignment="CENTER",
-            controls=[ 
-                ft.PopupMenuButton(
+            controls=[
+                ft.IconButton(
                     icon=ft.Icons.ADD_BOX,
                     tooltip="Add Module",
-                    items=[
-                        ft.PopupMenuItem(
-                            content=ft.Row(
-                                controls=[
-                                    self.icon_selector,
-                                    self.color_selector,
-                                    self.title_field,
-                                ]
-                            ),
-                            padding=8,
-                        ),
-                        ft.PopupMenuItem(
-                            content=self.description_field, padding=8
-                        ),
-                    ],
-                    align=ft.Alignment.TOP_CENTER,
+                    on_click=self._open_create_dialog,
                 ),
                 self.modules_list,
                 ft.IconButton(
@@ -87,6 +62,7 @@ class ModuleSidebar(ft.Container):
         )
 
         self._ctx_menu = ContextMenu()
+        self._create_dialog = ModuleCreateDialog(on_create=self._on_create_module)
         self._edit_dialog = ModuleEditDialog(
             store=self._store,
             on_saved=self._on_module_edited,
@@ -113,7 +89,13 @@ class ModuleSidebar(ft.Container):
             actions_alignment=ft.MainAxisAlignment.END,
         )
 
-        for item in (self._settings_dialog, self._ctx_menu, self._delete_dialog, self._edit_dialog):
+        for item in (
+            self._settings_dialog,
+            self._ctx_menu,
+            self._delete_dialog,
+            self._create_dialog,
+            self._edit_dialog,
+        ):
             self.page.overlay.append(item)
         self.page.update()
 
@@ -121,7 +103,13 @@ class ModuleSidebar(ft.Container):
         page = self.page
         if page is None:
             return
-        for item in (self._settings_dialog, self._ctx_menu, self._delete_dialog, self._edit_dialog):
+        for item in (
+            self._settings_dialog,
+            self._ctx_menu,
+            self._delete_dialog,
+            self._create_dialog,
+            self._edit_dialog,
+        ):
             if hasattr(self, "_settings_dialog") and item in page.overlay:
                 page.overlay.remove(item)
 
@@ -156,16 +144,16 @@ class ModuleSidebar(ft.Container):
         """Dig the Module back out of a tile built by ``_make_tile``."""
         return getattr(getattr(control, "content", None), "module", None)
 
-    def add_module(self, e: ft.ControlEvent):
-        title = self.title_field.value.strip()
-        if not title:
-            return
+    def _open_create_dialog(self, e=None):
+        self._create_dialog.show()
 
+    def _on_create_module(self, title, description, icon, color):
+        """Store a module the create dialog handed back and show its tile."""
         _module = Module(
             title=title,
-            description=self.description_field.value,
-            icon=self.icon_selector.value or ft.Icons.FOLDER,
-            color=self.color_selector.value,
+            description=description,
+            icon=icon or ft.Icons.FOLDER,
+            color=color,
         )
 
         self._store.save_module(_module)
@@ -173,11 +161,6 @@ class ModuleSidebar(ft.Container):
         # Keep the new module where the list just put it (at the end) rather
         # than letting it jump once the sidebar reloads.
         self._persist_order()
-
-        self.icon_selector.reset()
-        self.color_selector.reset()
-        self.title_field.value = ""
-        self.description_field.value = ""
         self.update()
 
     #  ordering 
