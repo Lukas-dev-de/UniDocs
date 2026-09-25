@@ -24,10 +24,14 @@ class TagDialog(ft.AlertDialog):
     Saves assignments back via ModuleStore on confirm (stores IDs).
     """
 
-    def __init__(self, store: ModuleStore, on_changed=None):
+    def __init__(self, store: ModuleStore, on_changed=None, save_handler=None):
         super().__init__()
         self._store = store
         self._on_changed = on_changed
+        # When set, Save hands the (mutated) documents to this callback instead
+        # of writing tag IDs to disk. Used by callers whose documents do not
+        # exist on disk yet (e.g. the import dialog staging tags pre-import).
+        self._save_handler = save_handler
 
         self._docs: list[Document] = []
         self._module: Module | None = None
@@ -276,7 +280,8 @@ class TagDialog(ft.AlertDialog):
                     current.discard(tid)
                 # None (partial) -> leave this doc unchanged
             new_ids = [tid for tid in order if tid in current]
-            self._store.save_doc_tags(self._module, doc, new_ids)
+            if self._save_handler is None:
+                self._store.save_doc_tags(self._module, doc, new_ids)
             doc.tags = [
                 Tag(tid, tag_map[tid]["name"], tag_map[tid]["color"])
                 for tid in new_ids
@@ -284,7 +289,9 @@ class TagDialog(ft.AlertDialog):
 
         self.open = False
         self.update()
-        if self._on_changed:
+        if self._save_handler is not None:
+            self._save_handler(self._docs)
+        elif self._on_changed:
             self._on_changed()
 
     def _cancel(self, e):

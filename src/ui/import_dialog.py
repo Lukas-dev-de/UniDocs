@@ -27,7 +27,10 @@ from pathlib import Path
 import flet as ft
 
 from models.module import Module
+from models.document import Document
+from models.tag import Tag
 from app_storage.module_store import ModuleStore
+from ui.components.tag_dialog import TagDialog
 
 
 class ImportDialog(ft.AlertDialog):
@@ -42,6 +45,10 @@ class ImportDialog(ft.AlertDialog):
         self._selected_module: Module | None = None
         # original filename → display name (stem only, or full name typed by user)
         self._display_names: dict[str, str] = {}
+        # original filenames of currently selected rows
+        self._selected_files: set[str] = set()
+        # original filename → set of tag IDs to apply on import
+        self._file_tags: dict[str, set[str]] = {}
 
         #  module dropdown (fills the width via the column's STRETCH) 
         self._module_dropdown = ft.Dropdown(
@@ -74,6 +81,19 @@ class ImportDialog(ft.AlertDialog):
 
         self._status = ft.Text("", color=ft.Colors.ERROR, size=12)
 
+        #  tag assignment (for the selected rows) 
+        self._tag_button = ft.Button(
+            "Tags for selected…",
+            icon=ft.Icons.LABEL_OUTLINE,
+            on_click=self._open_tag_panel,
+            disabled=True,
+        )
+        # reuse the "Manage Tags" dialog; its Save hands the staged documents
+        # back instead of touching the disk (docs do not exist yet)
+        self._tag_dialog = TagDialog(
+            store=self._store, save_handler=self._apply_staged_tags
+        )
+
         #  layout 
         self.modal = True
         # hug the content and sit at the top of the window, not in the middle
@@ -104,6 +124,7 @@ class ImportDialog(ft.AlertDialog):
                                 icon=ft.Icons.FOLDER_OPEN,
                                 on_click=self._pick_files,
                             ),
+                            self._tag_button,
                         ],
                     ),
                     self._file_list_container,
@@ -171,6 +192,7 @@ class ImportDialog(ft.AlertDialog):
 
     def _rebuild_file_list(self):
         self._file_list.controls.clear()
+        self._tag_button.disabled = not self._selected_files
         if not self._picked_files:
             self._no_files_text.visible = True
             self._resize_file_list_container(0)
@@ -211,8 +233,20 @@ class ImportDialog(ft.AlertDialog):
             f._name_click = name_click
             f._name_field = name_field
 
-            self._file_list.controls.append(
-                ft.Row(
+            selected = f.name in self._selected_files
+
+            # clicking anywhere on the row (icon, empty space) selects it;
+            # the name has its own gesture detector so a tap there renames
+            row = ft.Container(
+                border_radius=6,
+                padding=ft.Padding.symmetric(horizontal=4, vertical=2),
+                bgcolor=(
+                    ft.Colors.with_opacity(0.16, ft.Colors.PRIMARY)
+                    if selected
+                    else None
+                ),
+                on_click=lambda ev, file=f: self._toggle_selection(file),
+                content=ft.Row(
                     spacing=6,
                     controls=[
                         ft.Icon(
@@ -224,6 +258,7 @@ class ImportDialog(ft.AlertDialog):
                             expand=True,
                             controls=[name_click, name_field],
                         ),
+                        self._tag_dots(f.name),
                         ft.IconButton(
                             icon=ft.Icons.CLOSE,
                             icon_size=14,
@@ -231,8 +266,10 @@ class ImportDialog(ft.AlertDialog):
                             on_click=lambda ev, file=f: self._remove_file(file),
                         ),
                     ],
-                )
+                ),
             )
+
+            self._file_list.controls.append(row)
 
     _FILE_ROW_HEIGHT = 44   # one row incl. spacing
     _FILE_LIST_MAX_HEIGHT = 420   # beyond that the list scrolls
@@ -274,6 +311,79 @@ class ImportDialog(ft.AlertDialog):
         file._name_click.visible = True
         self.update()
 
+    #  tag assignment for the selected rows 
+
+    def _selected_file_names(self) -> list[str]:
+        return [f.name for f in self._picked_files if f.name in self._selected_files]
+
+    def _tag_dots(self, filename: str) -> ft.Control:
+        """Tiny colour dots showing the tags staged for one file."""
+        tag_ids = self._file_tags.get(filename, set())
+        if not tag_ids:
+            return ft.Container(width=0, height=0)
+        by_id = {t["id"]: t for t in self._store.load_all_tags()}
+        return ft.Row(
+            spacing=3,
+            tight=True,
+            controls=[
+                ft.Container(
+                    width=9,
+                    height=9,
+                    border_radius=5,
+                    bgcolor=by_id[tid]["color"],
+                    tooltip=by_id[tid]["name"],
+                )
+                for tid in tag_ids
+                if tid in by_id
+            ],
+        )
+
+    def _open_tag_panel(self, e):
+        if not self._selected_module:
+            self._show_error("Select a target module first.")
+            return
+        names = self._selected_file_names()
+        if not names:
+            self._show_error("Select at least one document first.")
+            return
+        self._status.value = ""
+
+        by_id = {t["id"]: t for t in self._store.load_all_tags()}
+        docs = []
+        for f in self._picked_files:
+            if f.name not in self._selected_files:
+                continue
+            staged = self._file_tags.get(f.name, set())
+            tags = [
+                Tag(tid, by_id[tid]["name"], by_id[tid]["color"])
+                for tid in staged
+                if tid in by_id
+            ]
+            # filepath carries the original filename, so _apply_staged_tags can
+            # map the dialog's documents back onto the staged files
+            docs.append(
+                Document(
+                    title=Path(f.name).stem,
+                    description="",
+                    filepath=f.name,
+                    tags=tags,
+                )
+            )
+
+        if self._tag_dialog not in self.page.overlay:
+            self.page.overlay.append(self._tag_dialog)
+            # appending to the overlay only wires the parent up on page.update(),
+            # so the dialog has no .page yet -> flush once before opening it
+            self.page.update()
+        self._tag_dialog.open_for_documents(docs, self._selected_module)
+
+    def _apply_staged_tags(self, docs: list[Document]):
+        """Callback from the Manage Tags popup: write the chosen tags back."""
+        for doc in docs:
+            self._file_tags[doc.filepath] = {t.id for t in doc.tags}
+        self._rebuild_file_list()
+        self.update()
+
     #  file picking / removal 
 
     async def _pick_files(self, e):
@@ -283,9 +393,19 @@ class ImportDialog(ft.AlertDialog):
         self._rebuild_file_list()
         self.update()
 
+    def _toggle_selection(self, file: ft.FilePickerResultFile):
+        if file.name in self._selected_files:
+            self._selected_files.discard(file.name)
+        else:
+            self._selected_files.add(file.name)
+        self._rebuild_file_list()
+        self.update()
+
     def _remove_file(self, file: ft.FilePickerResultFile):
         self._picked_files = [f for f in self._picked_files if f.name != file.name]
         self._display_names.pop(file.name, None)
+        self._selected_files.discard(file.name)
+        self._file_tags.pop(file.name, None)
         self._rebuild_file_list()
         self.update()
 
@@ -322,6 +442,19 @@ class ImportDialog(ft.AlertDialog):
                 if display_stem != doc.title:
                     self._store.rename_document(doc, display_stem)
 
+                # apply the tags staged for this file
+                tag_ids = self._file_tags.get(f.name)
+                if tag_ids:
+                    self._store.save_doc_tags(
+                        self._selected_module, doc, list(tag_ids)
+                    )
+                    tag_map = {t["id"]: t for t in self._store.load_all_tags()}
+                    doc.tags = [
+                        Tag(tid, tag_map[tid]["name"], tag_map[tid]["color"])
+                        for tid in tag_ids
+                        if tid in tag_map
+                    ]
+
                 added_docs.append(doc)
 
             except Exception as ex:
@@ -348,6 +481,8 @@ class ImportDialog(ft.AlertDialog):
     def _reset_state(self, e):
         self._picked_files = []
         self._display_names = {}
+        self._selected_files = set()
+        self._file_tags = {}
         self._rebuild_file_list()
         self._status.value = ""
 
