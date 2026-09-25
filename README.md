@@ -46,28 +46,14 @@ do not.
 
 ## Stuff to implement:
 #### low effort
-- [x] add more icons for selection
-- [x] feature: change/edit module icon like title
 - [ ] feature: select for multiple tags by ctl click on tag filters
 
 #### medium effort 
-- [x] feature: applying tags by drag n dropping them from the filter bar onto documents 
-- [x] feature: renaming files directly in import/import menu 
-- [ ] feature: add documents to module per drag n drop
-- [x] feature: add colors to modules
-- [x] fix: get links to repository in settings to work 
-- [x] feature: selecting multiple files (for example with ctl+click or middle click) to apply tags or delete multiple at once
-- [x] feature: reorganise modules order in sidebar from the right click menu (no drag n drop)
 - [ ] feature: grouping modules in sidebar
 
 #### high effort
-- [x] feature: implement custom themes 
-- [x] feature: update check in the settings menu, patch releases install themselves on startup (and self-updating on Windows and Linux)
 - [ ] feature: file syncing (for example via self-hosting, github or googledrive ...)
 
-
-
-If you have suggestions feel free to list them here.
 
 <br>
 
