@@ -37,7 +37,10 @@ die() { printf 'error: %s\n' "$1" >&2; exit 1; }
 info() { printf '  %s\n' "$1"; }
 
 if [ "${1:-}" = "-u" ] || [ "${1:-}" = "--uninstall" ]; then
-    rm -rf "$INSTALL_DIR" "$APPS_DIR/unidocs.desktop" "$ICON_DIR/unidocs.png" "$BIN_DIR/$APP"
+    rm -rf "$INSTALL_DIR" "$APPS_DIR/unidocs.desktop" "$BIN_DIR/$APP"
+    # every hicolor size, not just the one we install today: older releases put
+    # the icon elsewhere, and a leftover there keeps showing the old logo
+    rm -f "$DATA_HOME"/icons/hicolor/*/apps/unidocs.png
     printf 'UniDocs removed. Your documents are untouched.\n'
     exit 0
 fi
@@ -88,6 +91,10 @@ mkdir -p "$BIN_DIR"
 ln -sfn "$INSTALL_DIR/$APP" "$BIN_DIR/$APP"
 
 # icon + menu entry
+# Drop any icon left in another hicolor size first. Older releases installed the
+# 256x256 copy and a later one switched to 512x512; the desktop then picks
+# whichever size fits and would keep rendering the stale logo.
+rm -f "$DATA_HOME"/icons/hicolor/*/apps/unidocs.png
 mkdir -p "$APPS_DIR" "$ICON_DIR"
 if [ -f "$INSTALL_DIR/unidocs.png" ]; then
     install -m 644 "$INSTALL_DIR/unidocs.png" "$ICON_DIR/unidocs.png"

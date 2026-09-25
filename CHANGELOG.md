@@ -3,6 +3,8 @@
 ## v2.4.1
 - change:
     - new app icon, used for the window, the desktop entry and the Windows installer
+- fix:
+    - Linux: `install.sh` clears the icon in every hicolor size before writing the new one, and on `--uninstall` too. A logo left behind by an earlier release in another size (256x256) could otherwise shadow the current one
 
 ## v2.4.0
 - new:
