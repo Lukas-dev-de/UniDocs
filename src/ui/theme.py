@@ -307,22 +307,45 @@ _register(Palette(
     id="catppuccin",
     label="Catppuccin",
     light=Variant(
-        surface="#EFF1F5",        # Latte base
-        surface_raised="#E6E9EF",  # Latte mantle
-        primary="#8839EF",         # Latte mauve
+        surface="#EFF1F5",
+        surface_raised="#E6E9EF",
+        primary="#8839EF",
         primary_container="#E0D5F4",
-        on_surface="#4C4F69",      # Latte text
+        on_surface="#4C4F69",
         on_surface_variant="#6C6F85",
-        error="#D20F39",           # Latte red
+        error="#D20F39",
     ),
     dark=Variant(
-        surface="#1E1E2E",        # Mocha base
-        surface_raised="#313244",  # Mocha surface0
-        primary="#CBA6F7",         # Mocha mauve
+        surface="#1E1E2E",
+        surface_raised="#313244",
+        primary="#CBA6F7",
         primary_container="#494060",
-        on_surface="#CDD6F4",      # Mocha text
+        on_surface="#CDD6F4",
         on_surface_variant="#A6ADC8",
-        error="#F38BA8",           # Mocha red
+        error="#F38BA8",
+    ),
+))
+
+_register(Palette(
+    id="everforest",
+    label="Everforest",
+    light=Variant(
+        surface="#FDF6E3",
+        surface_raised="#F4F0D9",
+        primary="#8DA101",
+        primary_container="#D6E3C3",
+        on_surface="#5C6A72",
+        on_surface_variant="#829181",
+        error="#F85552",
+    ),
+    dark=Variant(
+        surface="#2D353B",
+        surface_raised="#343F44",
+        primary="#A7C080",
+        primary_container="#3A4A41",
+        on_surface="#D3C6AA",
+        on_surface_variant="#859289",
+        error="#E67E80",
     ),
 ))
 
