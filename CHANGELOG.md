@@ -1,9 +1,9 @@
 # CHANGELOG
 
-## V2.4.2
+## v2.4.2
 - new:
     - import dialog: select files and assign tags to them before importing, through the same tag dialog used in the detail view
-    - new Catppuccin color palette in the settings theme picker
+    - new Catppuccin and Everforest color palette in the settings theme picker
 - change:
     - import dialog: the file list sits at the bottom of the dialog, grows with the number of files and scrolls once it gets tall, so a big import no longer pushes the dialog off screen
     - import dialog: the dialog hugs its content and opens at the top of the window instead of floating in the middle
@@ -11,6 +11,8 @@
     - reworked the module icon picker
 - fix:
     - the module icon picker trigger now shows the currently selected icon
+    - import dialog: importing a file whose name already exists in the target module is now blocked with an error instead of quietly copying it as "name (2)"
+    - import dialog: picking the same file twice no longer stages it twice
 
 ## v2.4.1
 - change:

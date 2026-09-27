@@ -389,7 +389,17 @@ class ImportDialog(ft.AlertDialog):
     async def _pick_files(self, e):
         files = await ft.FilePicker().pick_files(allow_multiple=True)
         if files:
-            self._picked_files.extend(files)
+            # never stage the same file twice: skip names already in the list
+            known = {f.name for f in self._picked_files}
+            fresh = [f for f in files if f.name not in known]
+            self._picked_files.extend(fresh)
+            if len(fresh) < len(files):
+                self._show_error(
+                    "Already in the list, skipped: "
+                    + ", ".join(f.name for f in files if f.name in known)
+                )
+            elif self._status.value:
+                self._status.value = ""
         self._rebuild_file_list()
         self.update()
 
@@ -409,6 +419,34 @@ class ImportDialog(ft.AlertDialog):
         self._rebuild_file_list()
         self.update()
 
+    #  name helpers 
+
+    def _display_stem(self, file: ft.FilePickerResultFile) -> str:
+        """Stem the file will be renamed to (extension stripped from the name)."""
+        display_name = self._display_names.get(file.name, file.name)
+        suffix = Path(file.name).suffix
+        # strip the name extension, but only the original file's suffix:
+        # a typed name like "Notes v1.0" keeps its dot intact.
+        if suffix and display_name.lower().endswith(suffix.lower()):
+            return display_name[: -len(suffix)]
+        return display_name
+
+    def _final_name(self, file: ft.FilePickerResultFile) -> str:
+        """Filename this picked file ends up with in the module folder."""
+        return self._display_stem(file) + Path(file.name).suffix
+
+    def _existing_doc_names(self) -> set[str]:
+        """Filenames already present in the selected module (fresh from disk)."""
+        module = next(
+            (
+                m
+                for m in self._store.load_all()
+                if m.title == self._selected_module.title
+            ),
+            self._selected_module,
+        )
+        return {Path(d.filepath).name for d in module.documents}
+
     #  import 
 
     def _import(self, e):
@@ -419,18 +457,34 @@ class ImportDialog(ft.AlertDialog):
             self._show_error("Please choose at least one file.")
             return
 
+        #  refuse name clashes before copying anything 
+        counts: dict[str, int] = {}
+        for f in self._picked_files:
+            name = self._final_name(f)
+            counts[name] = counts.get(name, 0) + 1
+
+        duplicates = sorted(n for n, c in counts.items() if c > 1)
+        if duplicates:
+            self._show_error(
+                "These names are used more than once — remove or rename "
+                "the duplicates:\n" + "\n".join(duplicates)
+            )
+            return
+
+        conflicts = sorted(n for n in counts if n in self._existing_doc_names())
+        if conflicts:
+            self._show_error(
+                "Already in this module — rename or remove before "
+                "importing:\n" + "\n".join(conflicts)
+            )
+            return
+
         added_docs = []
         errors = []
 
         for f in self._picked_files:
             display_name = self._display_names.get(f.name, f.name)
-
-            # strip name extension
-            display_stem = (
-                Path(display_name).stem
-                if "." in display_name
-                else display_name
-            )
+            display_stem = self._display_stem(f)
 
             try:
                 # copy file into module folder under its original name
