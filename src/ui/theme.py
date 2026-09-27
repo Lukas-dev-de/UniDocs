@@ -304,6 +304,29 @@ _register(Palette(
 ))
 
 _register(Palette(
+    id="catppuccin",
+    label="Catppuccin",
+    light=Variant(
+        surface="#EFF1F5",        # Latte base
+        surface_raised="#E6E9EF",  # Latte mantle
+        primary="#8839EF",         # Latte mauve
+        primary_container="#E0D5F4",
+        on_surface="#4C4F69",      # Latte text
+        on_surface_variant="#6C6F85",
+        error="#D20F39",           # Latte red
+    ),
+    dark=Variant(
+        surface="#1E1E2E",        # Mocha base
+        surface_raised="#313244",  # Mocha surface0
+        primary="#CBA6F7",         # Mocha mauve
+        primary_container="#494060",
+        on_surface="#CDD6F4",      # Mocha text
+        on_surface_variant="#A6ADC8",
+        error="#F38BA8",           # Mocha red
+    ),
+))
+
+_register(Palette(
     id="mono",
     label="Monochrome",
     light=Variant(
