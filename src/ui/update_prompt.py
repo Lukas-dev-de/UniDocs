@@ -39,9 +39,9 @@ def current_version() -> str:
         UNIDOCS_FAKE_VERSION=2.3.0-rc1 .venv/bin/flet run  # 2.3.0 looks like a patch
 
     In VS Code the "Python: Unidocs (update popup)" launch config does the
-    Same. The patch variant only installs itself where UniDocs can replace
-    itself (Windows setup, Linux install.sh / AppImage); everywhere else the
-    "Download" button just opens the browser.
+    Same. The install button only appears where UniDocs can install by itself
+    (Windows setup, Linux via ``install.sh`` or a writable AppImage); on macOS
+    and for a plain zip the same button just opens the download in the browser.
     """
     return os.environ.get("UNIDOCS_FAKE_VERSION", "").strip() or CURRENT_VERSION
 
@@ -67,8 +67,10 @@ class UpdatePrompt(ft.AlertDialog):
         super().__init__()
         current = current or current_version()
         self._asset = asset
+        self._release = release
         self._install_now = install_now
-        self._self_update = updater.can_install_asset(asset) and updater.can_self_update()
+        self._self_update = updater.can_install_update(asset)
+        self._linux = updater.platform.system().lower() == "linux"
 
         self._status = ft.Text("", size=12, color=ft.Colors.ON_SURFACE_VARIANT)
         self._ring = ft.ProgressRing(
@@ -81,13 +83,16 @@ class UpdatePrompt(ft.AlertDialog):
         )
 
         self._install_button = ft.FilledButton(
-            "Install now" if self._self_update else "Download",
+            self._install_label(),
             icon=ft.Icons.DOWNLOAD,
             disabled=not asset,
             on_click=self._install if self._self_update else None,
             url=self._asset[1] if asset and not self._self_update else None,
         )
         self._later_button = ft.TextButton("Later", on_click=self._later)
+        self._manual_button = ft.TextButton(
+            "Manually", icon=ft.Icons.OPEN_IN_NEW, url=release.page_url
+        )
         self._notes_button = ft.TextButton(
             "Release notes", icon=ft.Icons.DESCRIPTION, url=release.page_url
         )
@@ -158,14 +163,25 @@ class UpdatePrompt(ft.AlertDialog):
 
     def did_mount(self):
         if self._install_now and self._asset:
-            self._installer.start(self._asset[1])
+            self._installer.start(self._asset, self._release)
 
     #  actions 
+
+    def _install_label(self) -> str:
+        if not self._self_update:
+            return "Download"
+        return "Install automatically" if self._linux else "Install now"
 
     def _action_buttons(self) -> list[ft.Control]:
         if not self._asset:
             return [ft.TextButton("Close", on_click=self._later)]
-        return [self._later_button, self._install_button]
+        buttons: list[ft.Control] = [self._later_button]
+        # Linux gets a real choice: let install.sh do it, or open the release and
+        # pick a download by hand.
+        if self._self_update and self._linux:
+            buttons.append(self._manual_button)
+        buttons.append(self._install_button)
+        return buttons
 
     def _later(self, e):
         self.open = False
@@ -173,7 +189,7 @@ class UpdatePrompt(ft.AlertDialog):
 
     def _install(self, e):
         if self._asset:
-            self._installer.start(self._asset[1])
+            self._installer.start(self._asset, self._release)
 
     def _set_busy(self, busy: bool) -> None:
         self._ring.visible = busy

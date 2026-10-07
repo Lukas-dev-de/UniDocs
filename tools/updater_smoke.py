@@ -141,6 +141,23 @@ check("linux setup file", updater.can_install_asset(SETUP_EXE, "Linux"), False)
 check("macos", updater.can_install_asset(LINUX_TAR, "Darwin"), False)
 check("no asset", updater.can_install_asset(None, "Windows"), False)
 
+print("can UniDocs install this update itself (not just download it):")
+# Same as can_install_asset, except Linux tarballs count even from source:
+# install.sh installs into ~/.local/share/unidocs wherever the running copy
+# lives. An AppImage still needs its own file to be writable.
+check("windows setup", updater.can_install_update(SETUP_EXE, "Windows"), True)
+check("windows zip", updater.can_install_update(WINDOWS_ZIP, "Windows"), False)
+check("linux tarball from source", updater.can_install_update(LINUX_TAR, "Linux"), True)
+check("linux tgz from source", updater.can_install_update(LINUX_TGZ, "Linux"), True)
+check(
+    "linux AppImage without a writable AppImage",
+    updater.can_install_update(LINUX_APPIMAGE, "Linux"),
+    False,
+)
+check("linux old zip", updater.can_install_update(LINUX_ZIP, "Linux"), False)
+check("macos", updater.can_install_update(LINUX_TAR, "Darwin"), False)
+check("no asset", updater.can_install_update(None, "Windows"), False)
+
 # -- download ----------------------------------------------------------------
 
 print("download:")

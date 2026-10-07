@@ -6,7 +6,7 @@ import updater
 from ui.theme import MODE_LABELS, PALETTES, ThemeManager
 from ui.update_install import UpdateInstaller
 
-CURRENT_VERSION = "2.4.2"
+CURRENT_VERSION = "2.4.3"
 
 REPO_URL = "https://github.com/Lukas-dev-de/UniDocs"
 RELEASES_URL = f"{REPO_URL}/releases"
@@ -417,7 +417,7 @@ class SettingsDialog(ft.AlertDialog):
         self._notes_button.url = release.page_url
         self._notes_button.visible = True
 
-        if updater.can_install_asset(self._update_asset) and updater.can_self_update():
+        if updater.can_install_update(self._update_asset):
             self._install_button.visible = True
         elif self._update_asset:
             self._download_button.url = self._update_asset[1]
@@ -431,7 +431,7 @@ class SettingsDialog(ft.AlertDialog):
     def _download_and_install(self, e):
         """Fetch the update and let it replace this install (then restart)."""
         if self._update_asset:
-            self._installer.start(self._update_asset[1])
+            self._installer.start(self._update_asset, self._update_release)
 
     #  called by the shared installer 
 

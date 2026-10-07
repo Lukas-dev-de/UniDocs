@@ -191,11 +191,12 @@ It unpacks the release archive into `~/.local/share/unidocs`, links `~/.local/bi
 and drops an icon plus a menu entry. `./install.sh v2.4.0` installs a specific tag,
 `./install.sh --uninstall` removes it again (your documents are untouched).
 
-The alternative is the `AppImage`: download, `chmod +x`, run it. Because the AppImage is one
-file, its in-app updater ("Install now", automatic patches) replaces that file; the same goes
-for the `install.sh` build, where the updater unpacks the new archive over
-`~/.local/share/unidocs`. Running from source (`flet run`) never replaces anything - there it
-just opens the download in the browser, like macOS does.
+The alternative is the `AppImage`: download, `chmod +x`, run it. The in-app updater
+installs Linux updates for you: the `install.sh` build runs the release's own `install.sh`
+("Install automatically" in the update dialog, or "Manually" to open the release page), an
+AppImage is replaced in place. Because `install.sh` always installs into
+`~/.local/share/unidocs`, this also works when UniDocs runs from source (`flet run`); only
+macOS still just opens the download in the browser.
 
 If the AppImage does not start, it is almost always the missing `libfuse.so.2`: Ubuntu 22.04
 and newer ship FUSE 3 only, so install `libfuse2` (`sudo apt install libfuse2`) or start it

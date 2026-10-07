@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## v2.4.3
+- change:
+    - Linux: updates install themselves on far more setups now, including a `flet run` checkout. The updater no longer unpacks the archive into the app folder on its own; it runs the release's own `install.sh`, which always installs into `~/.local/share/unidocs`
+    - Linux update dialog: the install button is called "Install automatically", and a "Manually" button next to it opens the release page for a hand-picked download
+- fix:
+    - Linux: running from source, or from a folder the app cannot write to, no longer left the update as a browser download only
+
 ## v2.4.2
 - new:
     - import dialog: select files and assign tags to them before importing, through the same tag dialog used in the detail view

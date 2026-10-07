@@ -16,7 +16,8 @@
 #   ./install.sh --uninstall                    remove the install (documents stay)
 #
 # Running it again is how you update by hand. The app also updates itself:
-# "Install now" in the update dialog, and patch releases install on startup.
+# "Install automatically" in the update dialog runs this script, and patch
+# releases install on startup.
 #
 # Requires GTK3, which every normal desktop already has. It is deliberately not
 # bundled, see the README.

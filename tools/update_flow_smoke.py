@@ -10,7 +10,9 @@ a fake page, so the decision table is verified without network or GUI.
     replace itself (Windows setup, Linux install.sh / AppImage)
         -> silent install, no buttons
     anything else that is newer
-        -> one popup with "Install now"/"Download" + "Later"
+        -> one popup: Linux asks "Install automatically" (install.sh) or
+           "Manually" (opens the release page), the other systems get
+           "Install now"/"Download" + "Later"
     nothing newer, or that version was shown already, or check failed
         -> nothing at all
 """
@@ -111,6 +113,14 @@ def run_check(
         mock.patch.object(updater, "fetch_latest", fake_fetch),
         mock.patch.object(updater, "asset_for", lambda release, system=None: asset),
         mock.patch.object(updater, "can_self_update", lambda *a, **k: self_update),
+        # ``can_install_update`` drives the dialog's install button. It is real
+        # logic on top of can_install_asset(), so mirror that here instead of
+        # blindly returning self_update (a macOS zip could never install).
+        mock.patch.object(
+            updater,
+            "can_install_update",
+            lambda a, s=None: self_update and updater.can_install_asset(a, system),
+        ),
         # can_install_asset() reads platform.system() itself; without this the
         # "Windows" cases would pass or fail depending on the machine running
         # this script.
@@ -153,6 +163,25 @@ check("waits for the user", getattr(prompt, "_install_now", None), False)
 check("Later + Install now", [b.content for b in prompt.actions] if prompt else None,
       ["Later", "Install now"])
 check("version remembered", cfg.seen_update, "2.3.1")
+
+print("patch release on Linux (install.sh build), switch off -> automatic + manual:")
+overlay, _cfg, _ = run_check("2.3.1", "2.3.0", asset=TAR, system="Linux", patch_auto=False)
+prompt = overlay[0] if overlay else None
+check("one prompt", len(overlay), 1)
+check("offers a self-update", getattr(prompt, "_self_update", None), True)
+check("label names the auto path", prompt._install_button.content if prompt else None,
+      "Install automatically")
+check("Later + Manually + install", [b.content for b in prompt.actions] if prompt else None,
+      ["Later", "Manually", "Install automatically"])
+check("manual opens the release page", prompt._manual_button.url if prompt else None,
+      "https://example.invalid/release")
+
+print("new minor on Linux -> same automatic/manual choice:")
+overlay, _cfg, _ = run_check("2.4.0", "2.3.0", asset=TAR, system="Linux")
+prompt = overlay[0] if overlay else None
+check("waits for the user", getattr(prompt, "_install_now", None), False)
+check("install button is the auto path", prompt._self_update if prompt else None, True)
+check("manual button present", prompt._manual_button in prompt.actions if prompt else None, True)
 
 print("patch release on an install that cannot replace itself -> asks instead:")
 overlay, _cfg, _ = run_check("2.3.1", "2.3.0", asset=TAR, system="Linux", self_update=False)
