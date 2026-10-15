@@ -40,6 +40,10 @@ class SettingsDialog(ft.AlertDialog):
         # Shared with main.py when available; otherwise a local fallback is
         # created and attached once this dialog mounts.
         self._theme = theme or ThemeManager(self._cfg)
+        # Esc closes the dialog: while it is open this dialog owns the page
+        # keyboard hook and forwards every other key to whoever held it before
+        # (the detail view uses the same hook to track Ctrl/Shift).
+        self._prev_key_handler = None
 
         self._path_field = ft.TextField(
             value=str(store.root),
@@ -173,6 +177,9 @@ class SettingsDialog(ft.AlertDialog):
 
         #  LAYOUT 
         self.modal = True
+        # Flet fires this when the dialog closes for any reason - keep the
+        # keyboard hook tidy even if we did not close it ourselves.
+        self.on_dismiss = self._on_dismiss
         # Let Material wrap title + content in a scroll view, so that on a short
         # window the body scrolls instead of overflowing past the dialog (and
         # the window) while the buttons stay visible.
@@ -193,13 +200,14 @@ class SettingsDialog(ft.AlertDialog):
                 spacing=16,
                 controls=[
                     # UniDocs folder location
-                    ft.Column(spacing=0, controls=[
-                        ft.Text("UniDocs location", weight=ft.FontWeight.W_600),
-                        ft.Row(controls=[self._path_field]),
-                        self._status,
-                    ]),
-
-                    ft.Divider(height=1),
+                    # TODO: auskommentiert, kommt spaeter wieder rein
+                    # ft.Column(spacing=0, controls=[
+                    #     ft.Text("UniDocs location", weight=ft.FontWeight.W_600),
+                    #     ft.Row(controls=[self._path_field]),
+                    #     self._status,
+                    # ]),
+                    #
+                    # ft.Divider(height=1),
 
                     # Appearance (theme palette + light/dark mode)
                     self._section(
@@ -264,9 +272,14 @@ class SettingsDialog(ft.AlertDialog):
             ),
         )
 
+        # Everything here applies instantly, so there is nothing to "Apply":
+        # a single Back button ends the dialog (Esc does the same).
         self.actions = [
-            ft.TextButton("Cancel", on_click=self._cancel),
-            ft.FilledButton("Apply", on_click=self._apply),
+            ft.FilledButton(
+                "Back",
+                icon=ft.Icons.ARROW_BACK,
+                on_click=self._close,
+            ),
         ]
 
     #  lifecycle 
@@ -325,6 +338,7 @@ class SettingsDialog(ft.AlertDialog):
         self._sync_startup_switches()
         self._status.value = ""
         self._reset_update_section()
+        self._install_key_handler()
         self.open = True
         self.update()
 
@@ -346,10 +360,46 @@ class SettingsDialog(ft.AlertDialog):
             return
         self._cfg.restore_module = bool(self._restore_module_switch.value)
 
-    def _cancel(self, e):
+    def _close(self, e=None):
+        """End the dialog (Back button / Esc)."""
         self._status.value = ""
         self.open = False
+        self._restore_key_handler()
         self.update()
+
+    def _on_dismiss(self, e=None):
+        """Flet event fired whenever the dialog closes - keep the hook tidy."""
+        self._restore_key_handler()
+
+    #  keyboard 
+
+    def _install_key_handler(self) -> None:
+        """Take over the page keyboard hook while the dialog is open."""
+        page = self.page
+        if page is None:
+            return
+        self._prev_key_handler = getattr(page, "on_keyboard_event", None)
+        page.on_keyboard_event = self._on_key_event
+
+    def _restore_key_handler(self) -> None:
+        """Hand the page keyboard hook back to whoever owned it before."""
+        page = self.page
+        if page is None:
+            return
+        page.on_keyboard_event = self._prev_key_handler
+
+    def _on_key_event(self, e):
+        key = getattr(e, "key", "") or ""
+        if key in ("Escape", "Esc"):
+            self._close()
+            return
+        # Forward everything else so the detail view keeps tracking Ctrl/Shift.
+        prev = self._prev_key_handler
+        if callable(prev):
+            try:
+                prev(e)
+            except Exception:
+                pass
 
     def _apply(self, e):
         raw = self._path_field.value.strip()
