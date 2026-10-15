@@ -17,8 +17,8 @@ Design
 Usage
 -----
     theme = ThemeManager(cfg)
-    theme.attach(page)          # applies the stored palette + mode
-    theme.set_palette("nord")   # persists and repaints immediately
+    theme.attach(page)            # applies the stored palette + mode
+    theme.set_palette("default")  # persists and repaints immediately
     theme.set_mode("dark")
 """
 
@@ -30,7 +30,7 @@ import flet as ft
 
 from app_storage.app_config import AppConfig
 
-DEFAULT_PALETTE = "unidocs"
+DEFAULT_PALETTE = "default"
 DEFAULT_MODE = "system"
 
 MODES: dict[str, ft.ThemeMode] = {
@@ -149,7 +149,8 @@ def _build_scheme(v: Variant, *, dark: bool) -> ft.ColorScheme:
 
     # Elevation ladder: each step blends a little further towards the
     # foreground colour so containers gain prominence as they "rise".
-    lift = 0.03 if dark else 0.04
+    # Dark surfaces swallow light, so they need wider steps than light ones.
+    lift = 0.05 if dark else 0.04
     container_lowest = mix(surface, v.on_surface, lift * 0.5)
     container_low = mix(surface, v.on_surface, lift)
     container = mix(surface, v.on_surface, lift * 2)
@@ -160,7 +161,11 @@ def _build_scheme(v: Variant, *, dark: bool) -> ft.ColorScheme:
     error_container = mix(v.error, surface, 0.8)
 
     if dark:
-        surface_dim = mix(surface, "#000000", 0.2)
+        # The page sits a clear step below the panels (see ThemeManager.apply),
+        # otherwise sidebar and detail view melt into the background. Near-black
+        # surfaces cannot build much of a contrast *ratio*, so the step has to be
+        # a big absolute one.
+        surface_dim = mix(surface, "#000000", 0.6)
         surface_bright = mix(surface, "#FFFFFF", 0.06)
     else:
         surface_dim = mix(surface, "#000000", 0.06)
@@ -212,24 +217,25 @@ def _register(palette: Palette) -> None:
 
 
 _register(Palette(
-    id="unidocs",
-    label="UniDocs Blue",
+    # Neutral greys with the accent blue taken from the app icon (#1475F4).
+    id="default",
+    label="Default",
     light=Variant(
-        surface="#F6F8FB",
-        surface_raised="#E7EDF6",
-        primary="#1A5FB4",
-        primary_container="#D3E2F7",
-        on_surface="#11181F",
-        on_surface_variant="#4C5866",
+        surface="#F7F8FA",
+        surface_raised="#ECEEF1",
+        primary="#1475F4",
+        primary_container="#D6E4FD",
+        on_surface="#1B1F24",
+        on_surface_variant="#555C66",
         error="#C62828",
     ),
     dark=Variant(
-        surface="#0F141A",
-        surface_raised="#1A222C",
-        primary="#7EB6FF",
-        primary_container="#1B3557",
-        on_surface="#E4E8EE",
-        on_surface_variant="#9DA9B6",
+        surface="#16191E",
+        surface_raised="#2E3238",
+        primary="#6CA4EE",
+        primary_container="#1E3050",
+        on_surface="#E6E8EB",
+        on_surface_variant="#9BA1AA",
         error="#FF6B6B",
     ),
 ))
@@ -427,6 +433,10 @@ class ThemeManager:
             use_material3=True,
         )
         page.theme_mode = MODES[self.mode]
+        # The sidebar and the detail view paint themselves in SURFACE. Let the
+        # page sit one step below that (SURFACE_DIM, the M3 "app background"),
+        # otherwise both panels melt into the background - worst in dark mode.
+        page.bgcolor = ft.Colors.SURFACE_DIM
         page.update()
 
     #  mutations (persisted) 

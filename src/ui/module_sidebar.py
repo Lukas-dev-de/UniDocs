@@ -39,6 +39,7 @@ class ModuleSidebar(ft.Container):
         # active group name is only shown in the hover tooltip.
         self._group_select = ft.PopupMenuButton(
             icon=ft.Icons.FOLDER_SPECIAL,
+            icon_color=ft.Colors.ON_SURFACE_VARIANT,
             tooltip="Home",
             items=self._group_menu_items(),
         )

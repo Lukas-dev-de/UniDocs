@@ -7,7 +7,7 @@ config.json example
 -------------------
 {
   "unidocs_location": "/home/user/Documents/UniDocs",
-  "theme_palette": "nord",
+  "theme_palette": "default",
   "theme_mode": "dark",
   "auto_install_patches": true,
   "seen_update": "2.4.0"
@@ -20,7 +20,7 @@ Usage
     cfg = AppConfig()
     cfg.unidocs_location          # → Path
     cfg.unidocs_location = Path("/new/path")   # saves immediately
-    cfg.theme_palette             # → "unidocs"  (see ui.theme.PALETTES)
+    cfg.theme_palette             # → "default"  (see ui.theme.PALETTES)
     cfg.theme_mode                # → "system"  (system | light | dark)
     cfg.auto_install_patches      # → True       (patch updates, see ui.update_prompt)
     cfg.seen_update               # → ""         (update popup already shown for this version)
@@ -58,7 +58,7 @@ class AppConfig:
     @property
     def theme_palette(self) -> str:
         """Id of the active colour palette (see ``ui.theme.PALETTES``)."""
-        return self._data.get("theme_palette") or "unidocs"
+        return self._data.get("theme_palette") or "default"
 
     @theme_palette.setter
     def theme_palette(self, value: str):
