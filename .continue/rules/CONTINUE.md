@@ -19,14 +19,22 @@
 - Keine Rabbit Holes. Wenige Befehle pro Frage, dann fragen.
 - Bei Unklarheit fragen statt selbst bauen.
 
+### Umgebung (wichtig)
+- **Kein `uv` auf diesem Rechner.** `uv run ...` und `uv sync` schlagen fehl
+  (`command not found`). Nicht mehr versuchen.
+- **Kein system-weites `flet`/`python`.** Nacktes `python -` findet `flet` nicht.
+- Das venv liegt im Repo: **`./.venv/bin/python`** benutzen, bzw.
+  `./.venv/bin/flet run` / `./.venv/bin/python tools/<script>.py`.
+- Beim Aufruf immer den vollen venv-Pfad nehmen, nicht auf `PATH` verlassen.
+
 ## Project Overview
 Unidocs is a document management application built with Flet. It organizes files into modules, supports tagging, and offers various UI features.
 
 ## Getting Started
-- Prerequisites: Python, `uv`.
-- Install: Clone repo, run `uv sync` (assumed).
-- Run: `uv run flet run`.
-- Web: `uv run flet run --web`.
+- Prerequisites: Python, venv im Repo (`./.venv`).
+- Run: `./.venv/bin/flet run`.
+- Web: `./.venv/bin/flet run --web`.
+- Tools/Skripte: `./.venv/bin/python tools/<script>.py`.
 
 ## Project Structure
 - `src/main.py`: Entry point.
