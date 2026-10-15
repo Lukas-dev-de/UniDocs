@@ -155,6 +155,22 @@ class SettingsDialog(ft.AlertDialog):
             expand=True,
         )
 
+        #  startup controls 
+        # Remember the group / module that was on screen, so the next launch can
+        # return there. The module switch only makes sense inside a remembered
+        # group, so it is greyed out while the first one is off.
+        self._restore_group_switch = ft.Switch(
+            label="Reopen in the last group",
+            value=self._cfg.restore_group,
+            on_change=self._on_restore_group_change,
+        )
+        self._restore_module_switch = ft.Switch(
+            label="Also reopen the last module",
+            value=self._cfg.restore_module and self._cfg.restore_group,
+            on_change=self._on_restore_module_change,
+            disabled=not self._cfg.restore_group,
+        )
+
         #  LAYOUT 
         self.modal = True
         # Let Material wrap title + content in a scroll view, so that on a short
@@ -195,6 +211,20 @@ class SettingsDialog(ft.AlertDialog):
                         self._palette_dropdown,
                         ft.Text(
                             "Changes apply instantly and are saved.",
+                            size=12,
+                            color=ft.Colors.ON_SURFACE_VARIANT,
+                        ),
+                    ),
+
+                    ft.Divider(height=1),
+
+                    # Startup (reopen group / module)
+                    self._section(
+                        "Startup",
+                        self._restore_group_switch,
+                        self._restore_module_switch,
+                        ft.Text(
+                            "Off: the app always opens on Home.",
                             size=12,
                             color=ft.Colors.ON_SURFACE_VARIANT,
                         ),
@@ -278,12 +308,21 @@ class SettingsDialog(ft.AlertDialog):
         """Re-align the palette dropdown after an external change."""
         self._palette_dropdown.value = self._theme.palette_id
 
+    def _sync_startup_switches(self) -> None:
+        """Re-align the startup switches with the stored config."""
+        self._restore_group_switch.value = self._cfg.restore_group
+        self._restore_module_switch.disabled = not self._cfg.restore_group
+        self._restore_module_switch.value = (
+            self._cfg.restore_module and self._cfg.restore_group
+        )
+
     #  public 
 
     def show(self) -> None:
         """Open the dialog, re-syncing the appearance controls first."""
         self._sync_mode_selector()
         self._sync_palette_dropdown()
+        self._sync_startup_switches()
         self._status.value = ""
         self._reset_update_section()
         self.open = True
@@ -291,6 +330,21 @@ class SettingsDialog(ft.AlertDialog):
 
     def _on_palette_change(self, e):
         self._theme.set_palette(self._palette_dropdown.value)
+
+    def _on_restore_group_change(self, e):
+        enabled = bool(self._restore_group_switch.value)
+        self._cfg.restore_group = enabled
+        # The module restore only works on top of a restored group.
+        self._restore_module_switch.disabled = not enabled
+        if not enabled:
+            self._restore_module_switch.value = False
+            self._cfg.restore_module = False
+        self.update()
+
+    def _on_restore_module_change(self, e):
+        if self._restore_module_switch.disabled:
+            return
+        self._cfg.restore_module = bool(self._restore_module_switch.value)
 
     def _cancel(self, e):
         self._status.value = ""

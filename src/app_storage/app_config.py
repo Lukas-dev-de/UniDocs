@@ -88,6 +88,42 @@ class AppConfig:
         self._set("auto_install_patches", bool(value))
 
     @property
+    def restore_group(self) -> bool:
+        """Reopen the app in the group that was on screen when it was closed."""
+        return bool(self._data.get("restore_group", False))
+
+    @restore_group.setter
+    def restore_group(self, value: bool):
+        self._set("restore_group", bool(value))
+
+    @property
+    def restore_module(self) -> bool:
+        """Also reopen the last module on startup (needs ``restore_group``)."""
+        return bool(self._data.get("restore_module", False))
+
+    @restore_module.setter
+    def restore_module(self, value: bool):
+        self._set("restore_module", bool(value))
+
+    @property
+    def last_group(self) -> str:
+        """Folder name of the group last shown ("" = Home)."""
+        return self._data.get("last_group") or ""
+
+    @last_group.setter
+    def last_group(self, value: str):
+        self._set("last_group", value or "")
+
+    @property
+    def last_module(self) -> str:
+        """Title of the last opened module ("" = none)."""
+        return self._data.get("last_module") or ""
+
+    @last_module.setter
+    def last_module(self, value: str):
+        self._set("last_module", value or "")
+
+    @property
     def seen_update(self) -> str:
         """Newest release version the user was already told about.
 

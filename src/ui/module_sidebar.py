@@ -6,6 +6,7 @@ from ui.components.group_dialog import GroupDialog
 from ui.settings_dialog import SettingsDialog
 from ui.context_menu import ContextMenu
 from models.module import Module
+from app_storage.app_config import AppConfig
 from app_storage.module_store import ModuleStore
 from ui.theme import ThemeManager
 
@@ -28,9 +29,16 @@ class ModuleSidebar(ft.Container):
         self._on_module_select = on_module_select
         self._on_module_update = on_module_update
         self._theme = theme
+        self._cfg = AppConfig()
 
         # Currently selected group filter: None = Home (the UniDocs root).
+        # With "reopen in the last group" on, start on the remembered group
+        # again (a group that has since been removed falls back to Home).
         self._active_group: str | None = None
+        if self._cfg.restore_group:
+            saved_group = self._cfg.last_group
+            if saved_group and saved_group in self._store.list_group_names():
+                self._active_group = saved_group
 
         self.modules_list = ft.Column(scroll=ft.ScrollMode.AUTO, expand=True)
 
@@ -187,11 +195,36 @@ class ModuleSidebar(ft.Container):
         self._group_select.tooltip = self._active_group or "Home"
 
     def _make_tile(self, module: Module):
-        tile = ModuleTile(module, on_select=self._on_module_select)
+        tile = ModuleTile(module, on_select=self._on_tile_select)
         return ft.GestureDetector(
             content=tile,
             on_secondary_tap_down=lambda e, m=module: self._show_module_menu(e, m),
         )
+
+    def _on_tile_select(self, module: Module):
+        """Remember the opened module, then hand it to the detail view."""
+        self._cfg.last_module = module.title
+        if self._on_module_select:
+            self._on_module_select(module)
+
+    #  session restore 
+
+    def restore_session(self):
+        """Reopen the last module after mount (main.py calls this).
+
+        Only runs when both switches are on: a restored group picks the right
+        list, and only then is the remembered module looked up inside it. A
+        module that no longer exists simply leaves the group on screen.
+        """
+        if not (self._cfg.restore_group and self._cfg.restore_module):
+            return
+        title = self._cfg.last_module
+        if not title or not self._on_module_select:
+            return
+        for module in self._store.load_modules(self._active_group):
+            if module.title == title:
+                self._on_module_select(module)
+                return
 
     @staticmethod
     def _tile_module(control) -> Module | None:
@@ -321,6 +354,7 @@ class ModuleSidebar(ft.Container):
 
     def _select_group(self, name: str | None):
         self._active_group = name
+        self._cfg.last_group = name or ""
         self._reload_and_update()
 
     def _open_new_group_dialog(self):

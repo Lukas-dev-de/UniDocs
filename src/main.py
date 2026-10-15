@@ -32,23 +32,28 @@ def main(page: ft.Page):
             module_card.set_module(module)
 
     page.title = "UniDocs"
+    sidebar = ModuleSidebar(
+        store=store,
+        theme=theme,
+        on_module_select=module_card.set_module,
+        on_module_update=on_module_update,
+    )
     page.add(
         ft.SafeArea(
             expand=True,
             content=ft.Row(
                 spacing=8,
                 controls=[
-                    ModuleSidebar(
-                        store=store,
-                        theme=theme,
-                        on_module_select=module_card.set_module,
-                        on_module_update=on_module_update,
-                    ),
+                    sidebar,
                     module_card,
                 ],
             ),
         ),
     )
+
+    # Reopen the group / module from the previous session (see Settings >
+    # Startup). Runs after the controls are mounted so the detail view exists.
+    sidebar.restore_session()
 
     # Asks GitHub in the background: silent for patch releases, at most one popup
     # per version otherwise (see ui.update_prompt).
