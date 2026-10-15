@@ -6,16 +6,19 @@ Modal form for creating a new module.
 Mirrors ``ModuleEditDialog``: a titled ``AlertDialog`` with full-width
 title / description fields, an icon + colour row, and Cancel / Create
 actions. The dialog owns no storage state; it collects the values and
-hands them to ``on_create(title, description, icon, color)``.
+hands them to ``on_create(title, description, icon, color, group)``.
 
     dialog = ModuleCreateDialog(on_create=cb)
-    dialog.show()
+    dialog.show(groups, current_group)
 """
 
 import flet as ft
 
 from ui.components.color_selector import ColorSelector
 from ui.components.icon_selector import IconSelector
+
+# Sentinel key for the "Home" entry: a real group folder can never be empty.
+_HOME_KEY = "__home__"
 
 
 class ModuleCreateDialog(ft.AlertDialog):
@@ -33,6 +36,9 @@ class ModuleCreateDialog(ft.AlertDialog):
             dense=True,
             on_submit=self._create,
         )
+        self._group_dropdown = ft.Dropdown(
+            label="Group",
+        )
         self._icon_selector = IconSelector()
         self._color_selector = ColorSelector()
 
@@ -47,6 +53,7 @@ class ModuleCreateDialog(ft.AlertDialog):
                     controls=[
                         self._title_field,
                         self._desc_field,
+                        self._group_dropdown,
                         ft.Row(
                             spacing=10,
                             vertical_alignment=ft.CrossAxisAlignment.CENTER,
@@ -78,13 +85,25 @@ class ModuleCreateDialog(ft.AlertDialog):
 
     #  api 
 
-    def show(self) -> None:
-        """Reset the form to a blank module and open the dialog."""
+    def show(self, groups=None, current_group=None) -> None:
+        """Reset the form to a blank module and open the dialog.
+
+        The group dropdown is filled from *groups* (folder names) and
+        pre-selected to *current_group* (``None`` = Home), so a new module
+        lands where the sidebar is currently pointing.
+        """
         self._title_field.value = ""
         self._title_field.error_text = None
         self._desc_field.value = ""
         self._icon_selector.reset()
         self._color_selector.reset()
+
+        options = [ft.dropdown.Option(key=_HOME_KEY, text="Home")]
+        for name in groups or []:
+            options.append(ft.dropdown.Option(key=name, text=name))
+        self._group_dropdown.options = options
+        self._group_dropdown.value = current_group or _HOME_KEY
+
         self.open = True
         self.update()
 
@@ -104,7 +123,10 @@ class ModuleCreateDialog(ft.AlertDialog):
         description = self._desc_field.value or ""
         icon = self._icon_selector.value or ft.Icons.FOLDER
         color = self._color_selector.value
+        group = self._group_dropdown.value
+        if group in (None, "", _HOME_KEY):
+            group = None
 
         self.close()
         if self._on_create:
-            self._on_create(title, description, icon, color)
+            self._on_create(title, description, icon, color, group)

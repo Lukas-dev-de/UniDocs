@@ -2,6 +2,7 @@ import flet as ft
 from ui.components.module_tile import ModuleTile
 from ui.components.module_create_dialog import ModuleCreateDialog
 from ui.components.module_edit_dialog import ModuleEditDialog
+from ui.components.group_dialog import GroupDialog
 from ui.settings_dialog import SettingsDialog
 from ui.context_menu import ContextMenu
 from models.module import Module
@@ -28,7 +29,19 @@ class ModuleSidebar(ft.Container):
         self._on_module_update = on_module_update
         self._theme = theme
 
+        # Currently selected group filter: None = Home (the UniDocs root).
+        self._active_group: str | None = None
+
         self.modules_list = ft.Column(scroll=ft.ScrollMode.AUTO, expand=True)
+
+        # Compact group selector: an icon button that drops a menu with
+        # "Home", every group (checkmarked) and a "New group…" entry. The
+        # active group name is only shown in the hover tooltip.
+        self._group_select = ft.PopupMenuButton(
+            icon=ft.Icons.FOLDER_SPECIAL,
+            tooltip="Home",
+            items=self._group_menu_items(),
+        )
 
         self.content = ft.Column(
             expand=True,
@@ -39,6 +52,7 @@ class ModuleSidebar(ft.Container):
                     tooltip="Add Module",
                     on_click=self._open_create_dialog,
                 ),
+                self._group_select,
                 self.modules_list,
                 ft.IconButton(
                     icon=ft.Icons.SETTINGS,
@@ -66,6 +80,39 @@ class ModuleSidebar(ft.Container):
         self._edit_dialog = ModuleEditDialog(
             store=self._store,
             on_saved=self._on_module_edited,
+        )
+        self._group_dialog = GroupDialog(
+            store=self._store,
+            on_moved=self._on_module_moved,
+        )
+
+        # New group prompt (opened from the group selector's "New group…").
+        self._new_group_field = ft.TextField(
+            label="Group name",
+            dense=True,
+            autofocus=True,
+            on_submit=self._commit_new_group,
+        )
+        self._new_group_status = ft.Text("", color=ft.Colors.ERROR, size=12)
+        self._new_group_dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Text("New Group"),
+            content=ft.Container(
+                width=320,
+                content=ft.Column(
+                    tight=True,
+                    spacing=10,
+                    controls=[self._new_group_field, self._new_group_status],
+                ),
+            ),
+            actions=[
+                ft.TextButton(
+                    "Cancel",
+                    on_click=lambda e: self._close_dialog(self._new_group_dialog),
+                ),
+                ft.FilledButton("Create", on_click=self._commit_new_group),
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
         )
 
         # Delete confirm dialog
@@ -95,6 +142,8 @@ class ModuleSidebar(ft.Container):
             self._delete_dialog,
             self._create_dialog,
             self._edit_dialog,
+            self._group_dialog,
+            self._new_group_dialog,
         ):
             self.page.overlay.append(item)
         self.page.update()
@@ -109,6 +158,8 @@ class ModuleSidebar(ft.Container):
             self._delete_dialog,
             self._create_dialog,
             self._edit_dialog,
+            self._group_dialog,
+            self._new_group_dialog,
         ):
             if hasattr(self, "_settings_dialog") and item in page.overlay:
                 page.overlay.remove(item)
@@ -129,8 +180,10 @@ class ModuleSidebar(ft.Container):
 
     def _load_from_store(self):
         self.modules_list.controls.clear()
-        for module in self._store.load_all():
+        for module in self._store.load_modules(self._active_group):
             self.modules_list.controls.append(self._make_tile(module))
+        self._group_select.items = self._group_menu_items()
+        self._group_select.tooltip = self._active_group or "Home"
 
     def _make_tile(self, module: Module):
         tile = ModuleTile(module, on_select=self._on_module_select)
@@ -145,23 +198,31 @@ class ModuleSidebar(ft.Container):
         return getattr(getattr(control, "content", None), "module", None)
 
     def _open_create_dialog(self, e=None):
-        self._create_dialog.show()
+        self._create_dialog.show(
+            groups=self._store.list_group_names(),
+            current_group=self._active_group,
+        )
 
-    def _on_create_module(self, title, description, icon, color):
+    def _on_create_module(self, title, description, icon, color, group):
         """Store a module the create dialog handed back and show its tile."""
         _module = Module(
             title=title,
             description=description,
             icon=icon or ft.Icons.FOLDER,
             color=color,
+            group=group,
         )
 
         self._store.save_module(_module)
-        self.modules_list.controls.append(self._make_tile(_module))
-        # Keep the new module where the list just put it (at the end) rather
-        # than letting it jump once the sidebar reloads.
-        self._persist_order()
-        self.update()
+        if group == self._active_group:
+            self.modules_list.controls.append(self._make_tile(_module))
+            # Keep the new module where the list just put it (at the end)
+            # rather than letting it jump once the sidebar reloads.
+            self._persist_order()
+            self.update()
+        else:
+            # Created in a group that is not the one on screen: just reload.
+            self._reload_and_update()
 
     #  ordering 
 
@@ -173,7 +234,8 @@ class ModuleSidebar(ft.Container):
                     self._tile_module(c) for c in self.modules_list.controls
                 )
                 if module
-            ]
+            ],
+            self._active_group,
         )
 
     def _module_index(self, module: Module) -> int | None:
@@ -222,9 +284,71 @@ class ModuleSidebar(ft.Container):
                 ("Edit", ft.Icons.EDIT_OUTLINED, ft.Colors.ON_SURFACE, lambda m=module: self._module_edit(m)),
                 ("Move up", ft.Icons.ARROW_UPWARD, ft.Colors.ON_SURFACE, move_up),
                 ("Move down", ft.Icons.ARROW_DOWNWARD, ft.Colors.ON_SURFACE, move_down),
+                ("Add to Group", ft.Icons.DRIVE_FILE_MOVE, ft.Colors.ON_SURFACE, lambda m=module: self._module_add_to_group(m)),
                 ("Delete", ft.Icons.DELETE_OUTLINE, ft.Colors.ERROR, lambda m=module: self._module_delete(m)),
             ],
         )
+
+    #  groups 
+
+    def _group_menu_items(self):
+        """Build the items for the group selector (Home + groups + New group…)."""
+        items = [
+            ft.PopupMenuItem(
+                content=ft.Text("Home"),
+                checked=self._active_group is None,
+                on_click=lambda e: self._select_group(None),
+            )
+        ]
+        for name in self._store.list_group_names():
+            items.append(
+                ft.PopupMenuItem(
+                    content=ft.Text(name),
+                    checked=self._active_group == name,
+                    on_click=lambda e, n=name: self._select_group(n),
+                )
+            )
+        items.append(ft.PopupMenuItem())  # divider
+        items.append(
+            ft.PopupMenuItem(
+                icon=ft.Icons.CREATE_NEW_FOLDER,
+                content=ft.Text("New group…"),
+                on_click=lambda e: self._open_new_group_dialog(),
+            )
+        )
+        return items
+
+    def _select_group(self, name: str | None):
+        self._active_group = name
+        self._reload_and_update()
+
+    def _open_new_group_dialog(self):
+        self._new_group_field.value = ""
+        self._new_group_field.error_text = None
+        self._new_group_status.value = ""
+        self._new_group_dialog.open = True
+        self._new_group_dialog.update()
+
+    def _commit_new_group(self, e=None):
+        name = (self._new_group_field.value or "").strip()
+        if not name:
+            self._new_group_field.error_text = "Name cannot be empty"
+            self._new_group_dialog.update()
+            return
+        try:
+            folder = self._store.create_group(name)
+        except ValueError as ex:
+            self._new_group_status.value = str(ex)
+            self._new_group_dialog.update()
+            return
+        self._close_dialog(self._new_group_dialog)
+        self._select_group(folder)
+
+    def _module_add_to_group(self, module: Module):
+        self._group_dialog.open_for_module(module)
+
+    def _on_module_moved(self):
+        self._reload_and_update()
 
     #  dialog helpers 
 

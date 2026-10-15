@@ -166,25 +166,34 @@ class ImportDialog(ft.AlertDialog):
     def _refresh_dropdown(self):
         modules = self._store.load_all()
         self._module_dropdown.options = [
-            ft.dropdown.Option(key=m.title, text=m.title) for m in modules
+            ft.dropdown.Option(
+                key=self._module_key(m),
+                text=f"{m.group} / {m.title}" if m.group else m.title,
+            )
+            for m in modules
         ]
         if self._selected_module:
-            titles = {m.title for m in modules}
-            if self._selected_module.title not in titles:
+            keys = {self._module_key(m) for m in modules}
+            if self._module_key(self._selected_module) not in keys:
                 self._selected_module = None
                 self._module_dropdown.value = None
 
+    @staticmethod
+    def _module_key(module: Module) -> str:
+        """Dropdown key that stays unique for same-titled modules in groups."""
+        return f"{module.group or ''}::{module.title}"
+
     def _select_module(self, module: Module):
         self._selected_module = module
-        self._module_dropdown.value = module.title
+        self._module_dropdown.value = self._module_key(module)
 
     def _on_module_changed(self, e):
-        title = self._module_dropdown.value
-        if not title:
+        key = self._module_dropdown.value
+        if not key:
             self._selected_module = None
             return
         for m in self._store.load_all():
-            if m.title == title:
+            if self._module_key(m) == key:
                 self._selected_module = m
                 break
 
@@ -441,7 +450,7 @@ class ImportDialog(ft.AlertDialog):
             (
                 m
                 for m in self._store.load_all()
-                if m.title == self._selected_module.title
+                if self._module_key(m) == self._module_key(self._selected_module)
             ),
             self._selected_module,
         )

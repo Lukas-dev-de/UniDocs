@@ -260,7 +260,7 @@ class ModuleDetail(ft.Container):
         # another module are reflected immediately on switch.
         fresh = None
         for m in self._store.load_all():
-            if m.title == module.title:
+            if self._same_module(m, module):
                 fresh = m
                 break
         self.module = fresh if fresh is not None else module
@@ -369,8 +369,18 @@ class ModuleDetail(ft.Container):
 
     #  import callback 
 
+    @staticmethod
+    def _same_module(a: Module | None, b: Module | None) -> bool:
+        """True when two Module refs point at the same folder (group + title)."""
+        return (
+            a is not None
+            and b is not None
+            and a.title == b.title
+            and (a.group or None) == (b.group or None)
+        )
+
     def _on_import_done(self, module: Module, docs):
-        if self.module and module.title == self.module.title:
+        if self._same_module(module, self.module):
             self._reload_current_module()
 
     def _reload_current_module(self):
@@ -380,7 +390,7 @@ class ModuleDetail(ft.Container):
         # another module are picked up correctly.
         refreshed = None
         for m in self._store.load_all():
-            if m.title == self.module.title:
+            if self._same_module(m, self.module):
                 refreshed = m
                 break
         if refreshed is not None:

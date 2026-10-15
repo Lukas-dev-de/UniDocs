@@ -7,14 +7,23 @@ Layout
 ------
 UniDocs/
 ├ tags.json              ← global tag registry: [{"id": "<uuid>", "name": "...", "color": "..."}, ...]
-├ .order                 ← sidebar order: ["Physics 101", "Math", ...]  (folder names)
-├ Physics 101/
+├ .order                 ← Home sidebar order: ["Physics 101", ...]  (folder names)
+├ Physics 101/           ← a module living directly in the root ("Home")
 │   ├ .meta              ← JSON: {"description": "...", "icon": "SCIENCE", "color": "#1A5FB4"}
 │   ├ .doc_tags          ← {"lecture.pdf": ["<uuid1>", "<uuid2>"], ...}  (tag IDs, not names)
 │   └ lecture.pdf
-└ Math/
-    ├ .meta
-    └ ...
+└ School/                ← a group: a folder holding modules instead of documents
+    ├ .group             ← empty marker file that marks this folder as a group
+    ├ .order             ← sidebar order for the modules inside this group
+    ├ Math/
+    │   ├ .meta
+    │   └ ...
+    └ Physics/
+        └ ...
+
+A folder is a *group* when it holds a .group marker; a folder is a *module*
+when it holds a .meta file. Groups carry no .meta, so they are never read as
+modules.
 
 Tags are stored by their stable UUID in .doc_tags, so renaming or recoloring
 a tag never breaks existing assignments.
@@ -37,6 +46,7 @@ META_FILENAME = ".meta"
 DOC_TAGS_FILENAME = ".doc_tags"
 GLOBAL_TAGS_FILENAME = "tags.json"
 ORDER_FILENAME = ".order"
+GROUP_MARKER_FILENAME = ".group"
 _DEFAULT_ICON_NAME = "FOLDER"
 
 
@@ -86,26 +96,49 @@ class ModuleStore:
 
     # -- module CRUD ----------------------------------------------------------
 
-    def load_all(self) -> list[Module]:
-        """Return a Module for every sub-folder that contains a .meta file.
+    def load_modules(self, group: str | None = None) -> list[Module]:
+        """Return the modules that live in *group* (``None`` = Home/root).
 
         The list follows the order the user moved the modules into (see
         :meth:`save_order`). Modules missing from that order are appended
         alphabetically, which is also the order used before anything has been
         rearranged.
         """
+        base = self._group_dir(group)
+        if not base.exists():
+            return []
+
         found: list[tuple[str, Module]] = []
-        for folder in sorted(self.root.iterdir()):
+        for folder in sorted(base.iterdir()):
             if folder.is_dir():
-                module = self._load_module(folder)
+                module = self._load_module(folder, group=group)
                 if module:
                     found.append((folder.name, module))
 
-        order = self.load_order()
+        order = self.load_order(group)
         if order:
             rank = {name: i for i, name in enumerate(order)}
             found.sort(key=lambda item: rank.get(item[0], len(rank)))
         return [module for _, module in found]
+
+    def load_all(self) -> list[Module]:
+        """Every module, Home first, then group by group (flattened)."""
+        modules = self.load_modules(None)
+        for group in self.list_group_names():
+            modules.extend(self.load_modules(group))
+        return modules
+
+    def list_group_names(self) -> list[str]:
+        """Folder names of the groups (root sub-folders carrying a .group)."""
+        try:
+            folders = sorted(self.root.iterdir())
+        except FileNotFoundError:
+            return []
+        return [
+            folder.name
+            for folder in folders
+            if folder.is_dir() and (folder / GROUP_MARKER_FILENAME).exists()
+        ]
 
     def save_module(self, module: Module) -> Path:
         folder = self._folder_for(module)
@@ -121,7 +154,7 @@ class ModuleStore:
 
     def rename_module(self, module: Module, new_title: str):
         old_folder = self._folder_for(module)
-        new_folder = self.root / _safe_name(new_title)
+        new_folder = self._group_dir(module.group) / _safe_name(new_title)
         if old_folder.exists() and old_folder != new_folder:
             old_folder.rename(new_folder)
         module.title = new_title
@@ -129,13 +162,14 @@ class ModuleStore:
         # A saved order is keyed by folder name, so follow the rename instead
         # of letting the module drop to the alphabetical tail.
         if old_folder.name != new_folder.name:
-            order = self.load_order()
+            order = self.load_order(module.group)
             if order:
                 self.save_order(
                     [
                         new_folder.name if name == old_folder.name else name
                         for name in order
-                    ]
+                    ],
+                    module.group,
                 )
 
     def rename_conflict(self, module: Module, new_title: str) -> bool:
@@ -146,18 +180,27 @@ class ModuleStore:
         conflict. Callers should check this before ``rename_module``, which
         would otherwise silently clobber the other folder.
         """
-        target = self.root / _safe_name(new_title)
-        return target != self._folder_for(module) and target.exists()
+        target = self._group_dir(module.group) / _safe_name(new_title)
+        if target != self._folder_for(module) and target.exists():
+            return True
+        # At Home level a module may not take over an existing group's folder.
+        if module.group is None:
+            clash = self.root / _safe_name(new_title)
+            if clash != self._folder_for(module) and (clash / GROUP_MARKER_FILENAME).exists():
+                return True
+        return False
 
     # -- sidebar order --------------------------------------------------------
 
-    def load_order(self) -> list[str]:
+    def load_order(self, group: str | None = None) -> list[str]:
         """Folder names in the order the user arranged them in.
 
-        Returns an empty list when the order was never changed, which tells
-        :meth:`load_all` to fall back to alphabetical sorting.
+        *group* selects which list: the Home order (root ``.order``) or the
+        order of the modules inside that group (``<group>/.order``). Returns an
+        empty list when the order was never changed, which tells
+        :meth:`load_modules` to fall back to alphabetical sorting.
         """
-        path = self.root / ORDER_FILENAME
+        path = self._group_dir(group) / ORDER_FILENAME
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
         except (FileNotFoundError, json.JSONDecodeError, OSError):
@@ -166,20 +209,67 @@ class ModuleStore:
             return []
         return [str(name) for name in data]
 
-    def save_order(self, titles: list[str]) -> None:
+    def save_order(self, titles: list[str], group: str | None = None) -> None:
         """Persist the module order shown in the sidebar.
 
+        *group* selects which list: the Home order (root ``.order``) or the
+        order of the modules inside that group (``<group>/.order``).
+
         Takes module *titles* and stores the folder name each one maps to, so
-        the file stays comparable with :meth:`load_all` even for titles that
-        ``_safe_name`` has to sanitise ("Physics: Intro" lives in "Physics
-        Intro"). Names that no longer exist are harmless: they simply never
-        match a folder and are dropped the next time the order is written.
+        the file stays comparable with :meth:`load_modules` even for titles
+        that ``_safe_name`` has to sanitise ("Physics: Intro" lives in
+        "Physics Intro"). Names that no longer exist are harmless: they simply
+        never match a folder and are dropped the next time the order is
+        written.
         """
-        self.root.mkdir(parents=True, exist_ok=True)
-        (self.root / ORDER_FILENAME).write_text(
+        base = self._group_dir(group)
+        base.mkdir(parents=True, exist_ok=True)
+        (base / ORDER_FILENAME).write_text(
             json.dumps([_safe_name(title) for title in titles], ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
+
+    # -- groups ---------------------------------------------------------------
+
+    def create_group(self, name: str) -> str:
+        """Create a group folder and return its (sanitised) folder name.
+
+        Returns the existing name when the group is already there. Raises
+        ``ValueError`` when the name is taken by a module instead.
+        """
+        folder_name = _safe_name(name)
+        folder = self.root / folder_name
+        if folder.exists():
+            if (folder / GROUP_MARKER_FILENAME).exists():
+                return folder_name
+            raise ValueError(f'"{folder_name}" already exists')
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / GROUP_MARKER_FILENAME).touch()
+        return folder_name
+
+    def move_module_to_group(self, module: Module, group: str | None) -> None:
+        """Move *module* into *group* (``None`` = Home) and follow the order."""
+        target_group = _safe_name(group) if group else None
+        src = self._folder_for(module)
+        dst = self._group_dir(target_group) / src.name
+        if src == dst:
+            module.group = target_group
+            return
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        if dst.exists():
+            raise ValueError(f'"{module.title}" already exists in this group')
+        src.rename(dst)
+
+        # Carry the module's slot over: drop it from the old order, append it
+        # to the new one (the target order is only rewritten when it exists).
+        old_order = self.load_order(module.group)
+        if old_order:
+            self.save_order([n for n in old_order if n != src.name], module.group)
+        new_order = self.load_order(target_group)
+        if new_order and src.name not in new_order:
+            new_order.append(src.name)
+            self.save_order(new_order, target_group)
+        module.group = target_group
 
     # -- document CRUD --------------------------------------------------------
 
@@ -334,10 +424,8 @@ class ModuleStore:
             tags = [t for t in self.load_all_tags() if t["id"] != tag_id]
             self._write_global_tags(tags)
 
-        # strip from every module's .doc_tags
-        for folder in self.root.iterdir():
-            if not folder.is_dir():
-                continue
+        # strip from every module's .doc_tags (Home modules and grouped ones)
+        for folder in self._iter_module_dirs():
             doc_tags = self._read_doc_tags(folder)
             changed = False
             for fname in list(doc_tags.keys()):
@@ -396,9 +484,23 @@ class ModuleStore:
     # -- private helpers ------------------------------------------------------
 
     def _folder_for(self, module: Module) -> Path:
-        return self.root / _safe_name(module.title)
+        return self._group_dir(module.group) / _safe_name(module.title)
 
-    def _load_module(self, folder: Path) -> Module | None:
+    def _group_dir(self, group: str | None) -> Path:
+        """Folder a group's modules live in; the UniDocs root for Home."""
+        return self.root / _safe_name(group) if group else self.root
+
+    def _iter_module_dirs(self):
+        """Yield every module folder, in the root and inside every group."""
+        bases = [self.root] + [self.root / name for name in self.list_group_names()]
+        for base in bases:
+            if not base.exists():
+                continue
+            for folder in base.iterdir():
+                if folder.is_dir() and (folder / META_FILENAME).exists():
+                    yield folder
+
+    def _load_module(self, folder: Path, group: str | None = None) -> Module | None:
         meta_path = folder / META_FILENAME
         if not meta_path.exists():
             return None
@@ -414,6 +516,7 @@ class ModuleStore:
             icon=_name_to_icon(icon_name),
             # Absent (or null) for modules created before v2.3.0 → follows theme.
             color=meta.get("color") or None,
+            group=group,
         )
 
         # build id→Tag lookup from the live global registry

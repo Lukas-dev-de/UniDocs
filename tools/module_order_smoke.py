@@ -157,10 +157,10 @@ def test_menu_entries() -> None:
         return {label: cb is not None for label, cb in sidebar._ctx_menu.items}
 
     top, middle, bottom = entries(0), entries(1), entries(2)
-    assert list(top) == ["Edit", "Move up", "Move down", "Delete"], list(top)
-    assert top == {"Edit": True, "Move up": False, "Move down": True, "Delete": True}, top
-    assert middle == {"Edit": True, "Move up": True, "Move down": True, "Delete": True}, middle
-    assert bottom == {"Edit": True, "Move up": True, "Move down": False, "Delete": True}, bottom
+    assert list(top) == ["Edit", "Move up", "Move down", "Add to Group", "Delete"], list(top)
+    assert top == {"Edit": True, "Move up": False, "Move down": True, "Add to Group": True, "Delete": True}, top
+    assert middle == {"Edit": True, "Move up": True, "Move down": True, "Add to Group": True, "Delete": True}, middle
+    assert bottom == {"Edit": True, "Move up": True, "Move down": False, "Add to Group": True, "Delete": True}, bottom
 
     # Clicking the enabled "Move down" moves that specific module.
     sidebar._show_module_menu(_Event(), sidebar._tile_module(controls[1]))
@@ -177,7 +177,7 @@ def test_add_module_goes_last() -> None:
     sidebar._move_module(sidebar._tile_module(sidebar.modules_list.controls[0]), +2)
     assert titles(sidebar) == ["Math", "Physics", "Chemistry"], titles(sidebar)
 
-    sidebar._on_create_module("Biology", "", ft.Icons.FOLDER, None)
+    sidebar._on_create_module("Biology", "", ft.Icons.FOLDER, None, None)
     assert titles(sidebar) == ["Math", "Physics", "Chemistry", "Biology"], titles(sidebar)
     assert store.load_order() == ["Math", "Physics", "Chemistry", "Biology"]
     assert displayed(store) == ["Math", "Physics", "Chemistry", "Biology"], displayed(store)
@@ -189,7 +189,7 @@ def test_order_survives_sanitised_titles() -> None:
     store = fresh_store()
     sidebar = make_sidebar(store)
 
-    sidebar._on_create_module("Physics: Intro", "", ft.Icons.FOLDER, None)
+    sidebar._on_create_module("Physics: Intro", "", ft.Icons.FOLDER, None, None)
     assert store.load_order() == [
         "Chemistry",
         "Math",

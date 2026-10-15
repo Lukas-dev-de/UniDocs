@@ -9,6 +9,7 @@ class Module:
         description: str = "",
         icon=ft.Icons.SQUARE,
         color: str | None = None,
+        group: str | None = None,
     ):
         self.title = title
         self.description = description
@@ -16,6 +17,9 @@ class Module:
         # Accent colour as a "#RRGGBB" string. ``None`` means "follow the
         # theme", which is how every module created before v2.3.0 behaves.
         self.color = color
+        # Name of the group folder this module lives in; ``None`` means the
+        # UniDocs root (shown as "Home" in the sidebar).
+        self.group = group
         self.documents = []
 
     def add_document(self, document: Document):

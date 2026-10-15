@@ -24,7 +24,11 @@ def main(page: ft.Page):
         comparison uses the pre-edit title because a rename changes the
         module's title before this callback runs.
         """
-        if module_card.module is not None and module_card.module.title == previous_title:
+        if (
+            module_card.module is not None
+            and module_card.module.title == previous_title
+            and (module_card.module.group or None) == (module.group or None)
+        ):
             module_card.set_module(module)
 
     page.title = "UniDocs"
