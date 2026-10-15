@@ -12,12 +12,23 @@ def main(page: ft.Page):
     cfg = AppConfig()
     store = ModuleStore(root=cfg.unidocs_location)
 
+    # Keep the window from being squashed so small that the sidebar and the
+    # detail pane no longer fit (sidebar is fixed-width, the detail pane needs
+    # room for the module grid).
+    page.window.min_height = 480
+    page.window.min_width = 420
+
     # Apply the persisted palette + appearance mode before the first paint.
     theme = ThemeManager(cfg)
     theme.attach(page)
 
     module_card = ModuleDetail(store=store)
-    group_home = GroupHomeDetail(store=store)
+    # The recent-modules widget hands a title back to the same opener the
+    # sidebar uses; the lambda resolves show_module late (defined just below).
+    group_home = GroupHomeDetail(
+        store=store,
+        on_open_module=lambda module: show_module(module),
+    )
     # The detail pane starts on the group home page (see below).
     module_card.visible = False
 

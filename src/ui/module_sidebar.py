@@ -8,6 +8,7 @@ from ui.context_menu import ContextMenu
 from models.module import Module
 from app_storage.app_config import AppConfig
 from app_storage.module_store import ModuleStore
+from app_storage.home_store import HomeStore
 from ui.theme import ThemeManager
 
 
@@ -32,6 +33,8 @@ class ModuleSidebar(ft.Container):
         self._theme = theme
         self._on_group_select = on_group_select
         self._cfg = AppConfig()
+        # Writes the "recent modules" list the group home page reads back.
+        self._home = HomeStore(store)
 
         # Currently selected group filter: None = Home (the UniDocs root).
         # With "reopen in the last group" on, start on the remembered group
@@ -228,6 +231,9 @@ class ModuleSidebar(ft.Container):
     def _on_tile_select(self, module: Module):
         """Remember the opened module, then hand it to the detail view."""
         self._cfg.last_module = module.title
+        # Feed the group's "recent modules" home widget; the active group is
+        # exactly the folder the module was picked from.
+        self._home.record_module_open(self._active_group, module.title)
         if self._on_module_select:
             self._on_module_select(module)
 
@@ -485,9 +491,14 @@ class ModuleSidebar(ft.Container):
             page = self.page
             if page is None:
                 return
-            page.run_thread_safe(self._reload_and_update)
+            # Called from the watchdog thread: hop onto the page's event loop
+            # (``run_task`` needs a coroutine function).
+            page.run_task(self._reload_and_update_async)
         except Exception:
             pass
+
+    async def _reload_and_update_async(self):
+        self._reload_and_update()
 
     def _reload_and_update(self):
         self._load_from_store()

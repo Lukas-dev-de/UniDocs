@@ -47,6 +47,9 @@ DOC_TAGS_FILENAME = ".doc_tags"
 GLOBAL_TAGS_FILENAME = "tags.json"
 ORDER_FILENAME = ".order"
 GROUP_MARKER_FILENAME = ".group"
+# Home page config per group (see app_storage.home_store.HomeStore). The store
+# only ever needs to know the name so the watcher can ignore it.
+HOME_FILENAME = ".home.json"
 _DEFAULT_ICON_NAME = "FOLDER"
 
 
@@ -468,7 +471,12 @@ class ModuleStore:
     def start_watching(self):
         try:
             from watchdog.observers import Observer
-            from watchdog.events import FileSystemEventHandler
+            from watchdog.events import (
+                EVENT_TYPE_CLOSED,
+                EVENT_TYPE_CLOSED_NO_WRITE,
+                EVENT_TYPE_OPENED,
+                FileSystemEventHandler,
+            )
         except ImportError:
             return
 
@@ -478,12 +486,31 @@ class ModuleStore:
 
             store = self
 
+            # Merely *reading* a file or listing a folder already makes
+            # inotify report "opened" / "closed" events. Reacting to those
+            # would feed the watcher with its own reload: the reload reads
+            # every module folder, which fires more open/close events, which
+            # reload again - a loop that pegs a CPU core and starves the UI.
+            # Only real changes (create / modify / delete / move) reload.
+            _read_noise = {
+                EVENT_TYPE_OPENED,
+                EVENT_TYPE_CLOSED,
+                EVENT_TYPE_CLOSED_NO_WRITE,
+            }
+
             class _Handler(FileSystemEventHandler):
                 def on_any_event(self, event):
-                    # Our own bookkeeping files: the order is written from the
-                    # sidebar, which repaints itself, so reacting here would
-                    # only trigger a pointless reload.
-                    if Path(event.src_path).name in (META_FILENAME, ORDER_FILENAME):
+                    if event.event_type in _read_noise:
+                        return
+                    # Our own bookkeeping files: .meta and .order are written
+                    # by code that repaints itself, and .home.json is the home
+                    # page's own config, so reacting here would only trigger a
+                    # pointless reload.
+                    if Path(event.src_path).name in (
+                        META_FILENAME,
+                        ORDER_FILENAME,
+                        HOME_FILENAME,
+                    ):
                         return
                     if store._on_change:
                         store._on_change()
