@@ -247,6 +247,26 @@ class ModuleStore:
         (folder / GROUP_MARKER_FILENAME).touch()
         return folder_name
 
+    def rename_group(self, old_name: str, new_name: str) -> str:
+        """Rename a group folder and return the new (sanitised) folder name.
+
+        The group's name *is* its folder name, so a rename simply moves the
+        folder - the modules and their ``.order`` inside travel with it.
+        """
+        old_dir = self.root / _safe_name(old_name)
+        new_dir = self.root / _safe_name(new_name)
+        if new_dir != old_dir and new_dir.exists():
+            raise ValueError(f'"{new_dir.name}" already exists')
+        if old_dir.exists() and old_dir != new_dir:
+            old_dir.rename(new_dir)
+        return new_dir.name
+
+    def group_rename_conflict(self, old_name: str, new_name: str) -> bool:
+        """True if renaming *old_name* to *new_name* would hit an existing folder."""
+        old_dir = self.root / _safe_name(old_name)
+        new_dir = self.root / _safe_name(new_name)
+        return new_dir != old_dir and new_dir.exists()
+
     def move_module_to_group(self, module: Module, group: str | None) -> None:
         """Move *module* into *group* (``None`` = Home) and follow the order."""
         target_group = _safe_name(group) if group else None

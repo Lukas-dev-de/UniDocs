@@ -21,6 +21,7 @@ sys.path.insert(0, str(SRC_DIR))
 from app_storage.module_store import ModuleStore  # noqa: E402
 from models.module import Module  # noqa: E402
 from ui.module_sidebar import ModuleSidebar  # noqa: E402
+from ui.group_home import GroupHomeDetail  # noqa: E402
 
 
 def fresh_store() -> ModuleStore:
@@ -99,10 +100,84 @@ def test_new_group_prompt() -> None:
     print("  new group prompt: ok")
 
 
+def test_rename_group_store() -> None:
+    store = fresh_store()
+
+    assert store.group_rename_conflict("School", "Math") is True
+    assert store.group_rename_conflict("School", "School") is False
+    assert store.group_rename_conflict("School", "Uni") is False
+
+    # Illegal characters are stripped, exactly like a new group name.
+    new_name = store.rename_group("School", "Uni:versity")
+    assert new_name == "University", new_name
+    assert store.list_group_names() == ["University"], store.list_group_names()
+    # The modules (and their order) travel with the folder.
+    assert [m.title for m in store.load_modules("University")] == ["Physics"]
+
+    # A conflicting rename is refused and leaves the folder alone.
+    try:
+        store.rename_group("University", "Math")
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("conflicting rename should raise")
+    assert store.list_group_names() == ["University"]
+    print("  rename group (store): ok")
+
+
+def test_sidebar_follows_rename() -> None:
+    store = fresh_store()
+    sidebar = make_sidebar(store)
+    sidebar._select_group("School")
+
+    store.rename_group("School", "Uni")
+    sidebar.on_group_renamed("School", "Uni")
+    assert sidebar._active_group == "Uni"
+    assert titles(sidebar) == ["Physics"], titles(sidebar)
+    print("  sidebar follows rename: ok")
+
+
+def test_home_page_rename() -> None:
+    store = fresh_store()
+    renamed = []
+    home = GroupHomeDetail(
+        store=store, on_group_renamed=lambda o, n: renamed.append((o, n))
+    )
+    home.update = lambda *a, **k: None  # type: ignore[method-assign]
+    home.show_error = lambda message: None  # type: ignore[method-assign]
+
+    home.set_group("School")
+    assert home.title_text.value == "School"
+
+    home.title_field.value = "Uni:versity"
+    home._commit_title(None)
+    assert home.title_text.value == "University", home.title_text.value
+    assert renamed == [("School", "University")], renamed
+
+    # A conflicting name is refused, the page keeps the old title.
+    renamed.clear()
+    home.title_field.value = "Math"
+    home._commit_title(None)
+    assert home.title_text.value == "University"
+    assert renamed == []
+
+    # Home is not renameable.
+    home.set_group(None)
+    assert home.title_text.value == "Home"
+    home.title_field.value = "Something"
+    home._commit_title(None)
+    assert home.title_text.value == "Home"
+    assert renamed == []
+    print("  home page rename: ok")
+
+
 def main() -> None:
     test_group_filter()
     test_create_in_active_group()
     test_new_group_prompt()
+    test_rename_group_store()
+    test_sidebar_follows_rename()
+    test_home_page_rename()
     print("MODULE GROUPS OK")
 
 

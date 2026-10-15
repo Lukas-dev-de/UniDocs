@@ -23,12 +23,14 @@ class ModuleSidebar(ft.Container):
         on_module_select=None,
         on_module_update=None,
         theme: ThemeManager | None = None,
+        on_group_select=None,
     ):
         super().__init__()
         self._store = store
         self._on_module_select = on_module_select
         self._on_module_update = on_module_update
         self._theme = theme
+        self._on_group_select = on_group_select
         self._cfg = AppConfig()
 
         # Currently selected group filter: None = Home (the UniDocs root).
@@ -207,6 +209,23 @@ class ModuleSidebar(ft.Container):
         if self._on_module_select:
             self._on_module_select(module)
 
+    @property
+    def active_group(self) -> str | None:
+        """Group folder currently shown in the sidebar (``None`` = Home)."""
+        return self._active_group
+
+    def on_group_renamed(self, old_name: str, new_name: str):
+        """Follow a group rename done on the group home page.
+
+        The active group is a folder name, so it has to move with the rename -
+        otherwise the sidebar would keep listing (and saving into) a folder that
+        no longer exists.
+        """
+        if self._active_group == old_name:
+            self._active_group = new_name
+            self._cfg.last_group = new_name
+        self._reload_and_update()
+
     #  session restore 
 
     def restore_session(self):
@@ -356,6 +375,9 @@ class ModuleSidebar(ft.Container):
         self._active_group = name
         self._cfg.last_group = name or ""
         self._reload_and_update()
+        # Opening a group shows its home page (no module is selected yet).
+        if self._on_group_select:
+            self._on_group_select(name)
 
     def _open_new_group_dialog(self):
         self._new_group_field.value = ""

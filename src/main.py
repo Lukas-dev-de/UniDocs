@@ -1,5 +1,6 @@
 import flet as ft
 from ui.module_detail import ModuleDetail
+from ui.group_home import GroupHomeDetail
 from ui.module_sidebar import ModuleSidebar
 from ui.theme import ThemeManager
 from ui.update_prompt import StartupUpdateCheck
@@ -16,6 +17,23 @@ def main(page: ft.Page):
     theme.attach(page)
 
     module_card = ModuleDetail(store=store)
+    group_home = GroupHomeDetail(store=store)
+    # The detail pane starts on the group home page (see below).
+    module_card.visible = False
+
+    def show_module(module):
+        """Show a module's documents in the detail pane."""
+        module_card.visible = True
+        group_home.visible = False
+        group_home.update()
+        module_card.set_module(module)
+
+    def show_group_home(group):
+        """Show a group's home page (no module selected)."""
+        module_card.visible = False
+        group_home.visible = True
+        module_card.update()
+        group_home.set_group(group)
 
     def on_module_update(module, previous_title):
         """Keep the detail view in sync after the sidebar edits a module.
@@ -35,9 +53,13 @@ def main(page: ft.Page):
     sidebar = ModuleSidebar(
         store=store,
         theme=theme,
-        on_module_select=module_card.set_module,
+        on_module_select=show_module,
         on_module_update=on_module_update,
+        on_group_select=show_group_home,
     )
+    # A rename on the home page has to move the sidebar's active group with it.
+    group_home.on_group_renamed = sidebar.on_group_renamed
+
     page.add(
         ft.SafeArea(
             expand=True,
@@ -45,11 +67,16 @@ def main(page: ft.Page):
                 spacing=8,
                 controls=[
                     sidebar,
+                    group_home,
                     module_card,
                 ],
             ),
         ),
     )
+
+    # Open on the active group's home page; restore_session may then swap in a
+    # module. Runs after the controls are mounted so the detail views exist.
+    show_group_home(sidebar.active_group)
 
     # Reopen the group / module from the previous session (see Settings >
     # Startup). Runs after the controls are mounted so the detail view exists.
