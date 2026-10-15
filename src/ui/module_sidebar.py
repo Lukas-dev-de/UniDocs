@@ -54,6 +54,15 @@ class ModuleSidebar(ft.Container):
             items=self._group_menu_items(),
         )
 
+        # Back to the group's home page when a module is open. The group menu
+        # does the same when the active group is picked again, this just makes
+        # it a one-click "up".
+        self._home_button = ft.IconButton(
+            icon=ft.Icons.HOME_OUTLINED,
+            tooltip="Group home",
+            on_click=self._go_home,
+        )
+
         self.content = ft.Column(
             expand=True,
             alignment="CENTER",
@@ -64,6 +73,7 @@ class ModuleSidebar(ft.Container):
                     on_click=self._open_create_dialog,
                 ),
                 self._group_select,
+                self._home_button,
                 self.modules_list,
                 ft.IconButton(
                     icon=ft.Icons.SETTINGS,
@@ -225,6 +235,11 @@ class ModuleSidebar(ft.Container):
             self._active_group = new_name
             self._cfg.last_group = new_name
         self._reload_and_update()
+
+    def _go_home(self, e=None):
+        """Show the active group's home page in the detail pane."""
+        if self._on_group_select:
+            self._on_group_select(self._active_group)
 
     #  session restore 
 
