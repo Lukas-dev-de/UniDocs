@@ -6,6 +6,7 @@
     - Linux update dialog: the install button is called "Install automatically", and a "Manually" button next to it opens the release page for a hand-picked download
 - fix:
     - Linux: running from source, or from a folder the app cannot write to, no longer left the update as a browser download only
+    - settings menu: the two columns no longer squeeze the System / Light / Dark switch onto two lines; the dialog falls back to a single stacked column before the switch gets that narrow, and on very narrow windows the switch shows icons only
 
 ## v2.4.2
 - new:

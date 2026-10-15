@@ -142,6 +142,23 @@ with tempfile.TemporaryDirectory() as tmp:
     )
     pack("UpdatePrompt (no asset)", UpdatePrompt(release, None))
 
+    # Responsive settings body: two columns when there is room, one stacked
+    # column when the window is narrow, and icon-only mode segments on top of
+    # that. Pure structure, so it can be checked without a page.
+    print("settings layout modes:")
+    dialog._stacked = True
+    pack("settings body (stacked)", dialog._build_content())
+    assert dialog._left_column.expand is False, "stacked column must not expand"
+    dialog._stacked = False
+    pack("settings body (two columns)", dialog._build_content())
+    assert dialog._left_column.expand is True, "row column must expand"
+    dialog._apply_compact_segments(True)
+    assert dialog._mode_segments[0].label is None, "compact segments keep their text"
+    pack("settings mode selector (compact)", dialog._mode_selector)
+    dialog._apply_compact_segments(False)
+    assert dialog._mode_segments[0].label is not None, "labels not restored"
+    pack("settings mode selector (labelled)", dialog._mode_selector)
+
     # Exercise the appearance controls through their full value range.
     print("appearance controls across palettes/modes:")
     for pid in PALETTES:

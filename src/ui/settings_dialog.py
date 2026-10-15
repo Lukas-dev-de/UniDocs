@@ -8,6 +8,18 @@ from ui.update_install import UpdateInstaller
 
 CURRENT_VERSION = "2.4.3"
 
+# The settings body is a two-column layout. The columns must never get
+# narrower than the widest control in them - the System / Light / Dark switch -
+# because Flet would then squeeze the labels onto two lines. So the whole body
+# falls back to a single stacked column before that width is reached; below the
+# second breakpoint the switch drops its text labels so it fits even then.
+COLUMN_MIN_WIDTH = 374      # width the mode selector needs next to its icon
+CONTENT_MAX_WIDTH = 780     # widest the dialog ever gets
+STACK_BREAKPOINT = 2 * COLUMN_MIN_WIDTH + 32   # = full dialog width
+COMPACT_BREAKPOINT = 400    # below this: mode selector drops its text labels
+CONTENT_MIN_WIDTH = 300
+CONTENT_SIDE_MARGIN = 72    # dialog padding + a little breathing room
+
 REPO_URL = "https://github.com/Lukas-dev-de/UniDocs"
 RELEASES_URL = f"{REPO_URL}/releases"
 CHANGELOG_URL = f"{REPO_URL}/blob/main/CHANGELOG.md"
@@ -40,6 +52,11 @@ class SettingsDialog(ft.AlertDialog):
         # Shared with main.py when available; otherwise a local fallback is
         # created and attached once this dialog mounts.
         self._theme = theme or ThemeManager(self._cfg)
+        # Responsive body (see _build_content / _apply_layout).
+        self._content_width = CONTENT_MAX_WIDTH
+        self._stacked = False
+        self._resize_hooked = False
+        self._prev_resize_handler = None
         # Esc closes the dialog: while it is open this dialog owns the page
         # keyboard hook and forwards every other key to whoever held it before
         # (the detail view uses the same hook to track Ctrl/Shift).
@@ -133,18 +150,23 @@ class SettingsDialog(ft.AlertDialog):
         )
 
         #  appearance controls 
+        # The segment labels are kept so a narrow window can swap the text out
+        # for icon-only segments (see _apply_layout) - three labelled segments
+        # do not fit into a very narrow dialog.
+        self._mode_segments = [
+            ft.Segment(value="system", label=ft.Text(MODE_LABELS["system"]),
+                       icon=ft.Icon(ft.Icons.BRIGHTNESS_AUTO)),
+            ft.Segment(value="light", label=ft.Text(MODE_LABELS["light"]),
+                       icon=ft.Icon(ft.Icons.LIGHT_MODE)),
+            ft.Segment(value="dark", label=ft.Text(MODE_LABELS["dark"]),
+                       icon=ft.Icon(ft.Icons.DARK_MODE)),
+        ]
+        self._compact_segments = False
         self._mode_selector = ft.SegmentedButton(
             selected=[self._theme.mode],
             allow_multiple_selection=False,
             show_selected_icon=False,
-            segments=[
-                ft.Segment(value="system", label=ft.Text(MODE_LABELS["system"]),
-                           icon=ft.Icon(ft.Icons.BRIGHTNESS_AUTO)),
-                ft.Segment(value="light", label=ft.Text(MODE_LABELS["light"]),
-                           icon=ft.Icon(ft.Icons.LIGHT_MODE)),
-                ft.Segment(value="dark", label=ft.Text(MODE_LABELS["dark"]),
-                           icon=ft.Icon(ft.Icons.DARK_MODE)),
-            ],
+            segments=self._mode_segments,
             on_change=self._on_mode_change,
         )
 
@@ -193,84 +215,90 @@ class SettingsDialog(ft.AlertDialog):
             ],
         )
 
-        self.content = ft.Container(
-            width=480,
-            content=ft.Column(
-                tight=True,
-                spacing=16,
-                controls=[
-                    # UniDocs folder location
-                    # TODO: auskommentiert, kommt spaeter wieder rein
-                    # ft.Column(spacing=0, controls=[
-                    #     ft.Text("UniDocs location", weight=ft.FontWeight.W_600),
-                    #     ft.Row(controls=[self._path_field]),
-                    #     self._status,
-                    # ]),
-                    #
-                    # ft.Divider(height=1),
+        # Left column: appearance + startup. Right column: updates + about.
+        self._left_column = ft.Column(
+            expand=True,
+            tight=True,
+            spacing=16,
+            controls=[
+                # UniDocs folder location
+                # TODO: auskommentiert, kommt spaeter wieder rein
+                # ft.Column(spacing=0, controls=[
+                #     ft.Text("UniDocs location", weight=ft.FontWeight.W_600),
+                #     ft.Row(controls=[self._path_field]),
+                #     self._status,
+                # ]),
+                #
+                # ft.Divider(height=1),
 
-                    # Appearance (theme palette + light/dark mode)
-                    self._section(
-                        "Appearance",
-                        self._mode_selector,
-                        # The palette dropdown floats its label above the field,
-                        # so it needs extra room below the mode selector.
-                        ft.Container(height=12, bgcolor=ft.Colors.TRANSPARENT),
-                        self._palette_dropdown,
-                        ft.Text(
-                            "Changes apply instantly and are saved.",
-                            size=12,
-                            color=ft.Colors.ON_SURFACE_VARIANT,
-                        ),
+                # Appearance (theme palette + light/dark mode)
+                self._section(
+                    "Appearance",
+                    self._mode_selector,
+                    # The palette dropdown floats its label above the field,
+                    # so it needs extra room below the mode selector.
+                    ft.Container(height=12, bgcolor=ft.Colors.TRANSPARENT),
+                    self._palette_dropdown,
+                    ft.Text(
+                        "Changes apply instantly and are saved.",
+                        size=12,
+                        color=ft.Colors.ON_SURFACE_VARIANT,
                     ),
+                ),
 
                     ft.Divider(height=1),
 
-                    # Startup (reopen group / module)
-                    self._section(
-                        "Startup",
-                        self._restore_group_switch,
-                        self._restore_module_switch,
-                        ft.Text(
-                            "Off: the app always opens on Home.",
-                            size=12,
-                            color=ft.Colors.ON_SURFACE_VARIANT,
-                        ),
+                # Startup (reopen group / module)
+                self._section(
+                    "Startup",
+                    self._restore_group_switch,
+                    self._restore_module_switch,
+                    ft.Text(
+                        "Off: the app always opens on Home.",
+                        size=12,
+                        color=ft.Colors.ON_SURFACE_VARIANT,
                     ),
-
-                    ft.Divider(height=1),
-
-                    # Update check
-                    self._section(
-                        "Updates",
-                        ft.Row(
-                            spacing=8,
-                            controls=[self._check_button, self._update_progress],
-                        ),
-                        self._update_status,
-                        self._update_actions,
-                        self._auto_patch_switch,
-                        self._auto_patch_note,
-                    ),
-
-                    ft.Divider(height=1),
-
-                    # About / links
-                    self._section(
-                        "About",
-                        self._link_row("Source code", ft.Icons.CODE, REPO_URL),
-                        self._link_row("Releases", ft.Icons.NEW_RELEASES, RELEASES_URL),
-                        self._link_row("Changelog", ft.Icons.DESCRIPTION, CHANGELOG_URL),
-                        self._link_row("Report an issue", ft.Icons.BUG_REPORT_OUTLINED, ISSUES_URL),
-                        ft.Text(
-                            f"Version {CURRENT_VERSION}",
-                            size=12,
-                            color=ft.Colors.ON_SURFACE_VARIANT,
-                        ),
-                    ),
-                ],
-            ),
+                ),
+            ],
         )
+
+        self._right_column = ft.Column(
+            expand=True,
+            tight=True,
+            spacing=16,
+            controls=[
+                # Update check
+                self._section(
+                    "Updates",
+                    ft.Row(
+                        spacing=8,
+                        controls=[self._check_button, self._update_progress],
+                    ),
+                    self._update_status,
+                    self._update_actions,
+                    self._auto_patch_switch,
+                    self._auto_patch_note,
+                ),
+
+                    ft.Divider(height=1),
+
+                # About / links
+                self._section(
+                    "About",
+                    self._link_row("Source code", ft.Icons.CODE, REPO_URL),
+                    self._link_row("Releases", ft.Icons.NEW_RELEASES, RELEASES_URL),
+                    self._link_row("Changelog", ft.Icons.DESCRIPTION, CHANGELOG_URL),
+                    self._link_row("Report an issue", ft.Icons.BUG_REPORT_OUTLINED, ISSUES_URL),
+                    ft.Text(
+                        f"Version {CURRENT_VERSION}",
+                        size=12,
+                        color=ft.Colors.ON_SURFACE_VARIANT,
+                    ),
+                ),
+            ],
+        )
+
+        self.content = self._build_content()
 
         # Everything here applies instantly, so there is nothing to "Apply":
         # a single Back button ends the dialog (Esc does the same).
@@ -288,6 +316,86 @@ class SettingsDialog(ft.AlertDialog):
         # Bind the fallback manager (if enabled) to the live page.
         if not self._theme.attached:
             self._theme.attach(self.page)
+        # Re-layout whenever the window is resized: below the breakpoint the two
+        # columns stack into one (see _apply_layout).
+        self._hook_resize()
+        self._apply_layout()
+
+    #  responsive layout 
+
+    def _build_content(self) -> ft.Container:
+        """Body of the dialog: two side-by-side columns, or one stacked column."""
+        # In a Row the columns share the available width; stacked they have to
+        # size to their own content instead.
+        self._left_column.expand = not self._stacked
+        self._right_column.expand = not self._stacked
+        if self._stacked:
+            body = ft.Column(
+                tight=True,
+                spacing=24,
+                controls=[self._left_column, self._right_column],
+            )
+        else:
+            body = ft.Row(
+                spacing=32,
+                vertical_alignment=ft.CrossAxisAlignment.START,
+                controls=[self._left_column, self._right_column],
+            )
+        return ft.Container(width=self._content_width, content=body)
+
+    def _apply_layout(self) -> None:
+        """Fit the body to the current window width (called on mount + resize)."""
+        page = self.page
+        if page is None or not self._resize_hooked:
+            return
+        page_width = page.width or CONTENT_MAX_WIDTH
+        width = int(
+            max(CONTENT_MIN_WIDTH,
+                min(CONTENT_MAX_WIDTH, page_width - CONTENT_SIDE_MARGIN))
+        )
+        stacked = width < STACK_BREAKPOINT
+        compact = width < COMPACT_BREAKPOINT
+        if (width, stacked, compact) == (
+            self._content_width, self._stacked, self._compact_segments
+        ):
+            return
+        self._content_width = width
+        self._stacked = stacked
+        self._apply_compact_segments(compact)
+        self.content = self._build_content()
+        self.update()
+
+    def _apply_compact_segments(self, compact: bool) -> None:
+        """Drop the mode labels on very narrow windows so the segments fit."""
+        self._compact_segments = compact
+        for seg in self._mode_segments:
+            # A fresh Text every time: a control detached from the segment must
+            # not be re-attached later.
+            seg.label = None if compact else ft.Text(MODE_LABELS[seg.value])
+
+    def _hook_resize(self) -> None:
+        page = self.page
+        if page is None or self._resize_hooked:
+            return
+        self._resize_hooked = True
+        self._prev_resize_handler = getattr(page, "on_resize", None)
+        page.on_resize = self._on_resize
+
+    def _unhook_resize(self) -> None:
+        page = self.page
+        if page is None or not self._resize_hooked:
+            return
+        self._resize_hooked = False
+        page.on_resize = self._prev_resize_handler
+
+    def _on_resize(self, e=None):
+        self._apply_layout()
+        prev = self._prev_resize_handler
+        if callable(prev):
+            try:
+                prev(e)
+            except Exception:
+                pass
 
     #  helpers 
 
@@ -333,6 +441,10 @@ class SettingsDialog(ft.AlertDialog):
 
     def show(self) -> None:
         """Open the dialog, re-syncing the appearance controls first."""
+        # Re-hook the resize callback: closing the dialog hands the page hook
+        # back (see _unhook_resize), and did_mount does not fire again.
+        self._hook_resize()
+        self._apply_layout()
         self._sync_mode_selector()
         self._sync_palette_dropdown()
         self._sync_startup_switches()
@@ -365,11 +477,13 @@ class SettingsDialog(ft.AlertDialog):
         self._status.value = ""
         self.open = False
         self._restore_key_handler()
+        self._unhook_resize()
         self.update()
 
     def _on_dismiss(self, e=None):
         """Flet event fired whenever the dialog closes - keep the hook tidy."""
         self._restore_key_handler()
+        self._unhook_resize()
 
     #  keyboard 
 
