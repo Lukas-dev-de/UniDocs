@@ -63,9 +63,20 @@ class ModuleSidebar(ft.Container):
             on_click=self._go_home,
         )
 
+        # The sidebar sits in the main Row as a non-flexible child, so it gets
+        # an unbounded width during layout - a plain ft.Divider draws nothing
+        # there (it paints on maxWidth). A fixed-width line avoids that.
+        self._separator = ft.Container(
+            width=40,
+            height=1,
+            bgcolor=ft.Colors.OUTLINE_VARIANT,
+            margin=ft.margin.symmetric(vertical=8),
+        )
+
         self.content = ft.Column(
             expand=True,
             alignment="CENTER",
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
             controls=[
                 ft.IconButton(
                     icon=ft.Icons.ADD_BOX,
@@ -73,6 +84,7 @@ class ModuleSidebar(ft.Container):
                     on_click=self._open_create_dialog,
                 ),
                 self._group_select,
+                self._separator,
                 self._home_button,
                 self.modules_list,
                 ft.IconButton(
