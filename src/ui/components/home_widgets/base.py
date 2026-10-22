@@ -40,7 +40,11 @@ class HomeWidget(ft.Container):
         self._edit_mode = False
 
         self.border_radius = 16
-        self.bgcolor = ft.Colors.SURFACE
+        # The home page itself paints SURFACE, so the card takes the next
+        # elevation step up ("raised") to stand out from it in both modes.
+        # Its inner items use SURFACE_CONTAINER_HIGHEST, one step above this.
+        self.bgcolor = ft.Colors.SURFACE_CONTAINER_HIGH
+        self.border = ft.border.all(1, ft.Colors.OUTLINE_VARIANT)
         self.padding = 16
 
         self._settings_btn = ft.IconButton(

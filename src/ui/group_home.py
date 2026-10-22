@@ -260,7 +260,7 @@ class GroupHomeDetail(ft.Container):
             ),
             padding=ft.padding.symmetric(vertical=32, horizontal=16),
             border_radius=16,
-            bgcolor=ft.Colors.SURFACE,
+            bgcolor=ft.Colors.SURFACE_CONTAINER_HIGH,
             border=ft.border.all(1, ft.Colors.OUTLINE_VARIANT),
             ink=True,
             tooltip="Widget hinzufügen",
