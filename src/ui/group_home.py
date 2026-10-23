@@ -15,8 +15,9 @@ There is no edit mode: everything hangs off the pencil button in the title row.
 It opens the widget
 manager - one row per widget type with a switch to show/hide it and a pencil to
 open that widget's settings, which in turn has a "Zurück" button leading back
-to the manager. A right-click on a card offers the same settings plus move
-up/down and "Ausblenden".
+to the manager. Rows are shown in page order and can be dragged up/down to
+change that order (HomeStore.set_widget_order). A right-click on a card offers
+the same settings plus move up/down and "Ausblenden".
 
 Hiding a widget only takes it off the page - its data stays in the .home.json,
 so switching it back on restores the same content.
@@ -66,49 +67,108 @@ class _WidgetManagerDialog(ft.AlertDialog):
     that widget's own settings dialog, which gets a "Zurück" button back here.
     """
 
-    def __init__(self, on_toggle, on_edit):
+    def __init__(self, on_toggle, on_edit, on_reorder):
         self._on_toggle = on_toggle
         self._on_edit = on_edit
-        self._column = ft.Column(
-            spacing=0, tight=True, scroll=ft.ScrollMode.AUTO, height=340
+        self._on_reorder = on_reorder
+        # Widget keys in the order the rows are shown; kept in sync on drag.
+        self._order: list[str] = []
+        self._list = ft.ReorderableListView(
+            height=340,
+            spacing=0,
+            show_default_drag_handles=False,
+            on_reorder=self._handle_reorder,
         )
         super().__init__(
             modal=True,
             title=ft.Text("Widgets"),
-            content=ft.Container(width=400, content=self._column),
+            content=ft.Container(
+                width=400,
+                content=ft.Column(
+                    spacing=6,
+                    tight=True,
+                    controls=[
+                        ft.Text(
+                            "Reihenfolge: am Griff rechts ziehen.",
+                            size=11,
+                            color=ft.Colors.OUTLINE,
+                        ),
+                        self._list,
+                    ],
+                ),
+            ),
             actions=[ft.TextButton("Fertig", on_click=lambda e: self.close())],
             actions_alignment=ft.MainAxisAlignment.END,
         )
 
     def reset(self, shown: list[str]):
-        """Rebuild one row per widget type; *shown* are the keys on the page."""
-        self._column.controls.clear()
-        for key, cls in _WIDGET_TYPES.items():
-            self._column.controls.append(
-                ft.Row(
-                    spacing=4,
-                    controls=[
-                        ft.Icon(
-                            _WIDGET_ICONS.get(key, ft.Icons.WIDGETS),
-                            size=18,
-                            color=ft.Colors.PRIMARY,
-                        ),
-                        ft.Text(cls.TITLE, size=13, expand=True),
-                        ft.Switch(
-                            value=key in shown,
-                            on_change=lambda e, k=key: self._on_toggle(
-                                k, e.control.value
-                            ),
-                        ),
-                        ft.IconButton(
-                            icon=ft.Icons.EDIT,
-                            icon_size=18,
-                            tooltip="Einstellungen",
-                            on_click=lambda e, k=key: self._on_edit(k),
-                        ),
-                    ],
-                )
-            )
+        """Rebuild one row per widget type.
+
+        *shown* are the keys on the page, already in page order: those come
+        first, the hidden types follow in their default order. So the top of
+        the list always mirrors what the user sees on the page.
+        """
+        order = [key for key in shown if key in _WIDGET_TYPES]
+        order += [key for key in _WIDGET_TYPES if key not in order]
+        self._order = order
+        self._list.controls.clear()
+        for key in order:
+            self._list.controls.append(self._row(key, key in shown))
+
+    def _row(self, key: str, on: bool) -> ft.Row:
+        """One widget line: icon, title, on/off switch, settings, drag grip."""
+        cls = _WIDGET_TYPES[key]
+        return ft.Row(
+            spacing=4,
+            opacity=1.0 if on else 0.55,
+            controls=[
+                ft.Icon(
+                    _WIDGET_ICONS.get(key, ft.Icons.WIDGETS),
+                    size=18,
+                    color=ft.Colors.PRIMARY,
+                ),
+                ft.Text(cls.TITLE, size=13, expand=True),
+                ft.Switch(
+                    value=on,
+                    on_change=lambda e, k=key: self._on_toggle(k, e.control.value),
+                ),
+                ft.IconButton(
+                    icon=ft.Icons.EDIT,
+                    icon_size=18,
+                    tooltip="Einstellungen",
+                    on_click=lambda e, k=key: self._on_edit(k),
+                ),
+                # Only the grip starts a drag, so a tap on the switch or the
+                # pencil never moves the row by accident.
+                ft.ReorderableDragHandle(
+                    mouse_cursor=ft.MouseCursor.GRAB,
+                    content=ft.Icon(
+                        ft.Icons.DRAG_INDICATOR,
+                        size=18,
+                        color=ft.Colors.OUTLINE,
+                    ),
+                ),
+            ],
+        )
+
+    def _handle_reorder(self, e: ft.OnReorderEvent):
+        """Apply a drag to the row list and persist the new order."""
+        old, new = e.old_index, e.new_index
+        if old is None or new is None or old == new:
+            return
+        # Reorder both the controls (UI truth) and the key list (data truth)
+        # the same way, so they cannot drift apart. The index is clamped,
+        # because a drop below the last row may report "one past the end".
+        for seq in (self._list.controls, self._order):
+            if not 0 <= old < len(seq):
+                continue
+            item = seq.pop(old)
+            seq.insert(min(max(new, 0), len(seq)), item)
+        self._on_reorder(list(self._order))
+        try:
+            self._list.update()
+        except RuntimeError:
+            pass
 
     def close(self):
         self.open = False
@@ -226,6 +286,7 @@ class GroupHomeDetail(ft.Container):
         self._manager = _WidgetManagerDialog(
             on_toggle=self._toggle_widget,
             on_edit=self._open_widget_settings,
+            on_reorder=self._reorder_widgets,
         )
         page.overlay.append(self._ctx_menu)
         page.overlay.append(self._manager)
@@ -291,6 +352,18 @@ class GroupHomeDetail(ft.Container):
             self._home.add_widget(self._group, key)
         else:
             self._home.remove_widget(self._group, key)
+        self._rebuild_widgets()
+        self.update()
+
+    def _reorder_widgets(self, order: list[str]):
+        """Drag & drop in the manager: save the new page order.
+
+        The manager also lists hidden types; only the keys that are on the
+        page keep a position in the ``widgets`` list, so those are the ones
+        written back. Hidden types stay hidden and keep their data.
+        """
+        shown = set(self._order())
+        self._home.set_widget_order(self._group, [k for k in order if k in shown])
         self._rebuild_widgets()
         self.update()
 
