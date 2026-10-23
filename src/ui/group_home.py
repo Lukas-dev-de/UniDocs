@@ -11,8 +11,8 @@ Below the title sits a grid of widgets (quick links, recent modules, todos,
 calendar, timetable - see ui/components/home_widgets/). Each group has its own
 widget config, stored in the group's ``.home.json`` (app_storage.home_store).
 
-There is no edit mode: everything hangs off the pencil button in the title row
-(and a right-click on the empty space between cards). It opens the widget
+There is no edit mode: everything hangs off the pencil button in the title row.
+It opens the widget
 manager - one row per widget type with a switch to show/hide it and a pencil to
 open that widget's settings, which in turn has a "Zurück" button leading back
 to the manager. A right-click on a card offers the same settings plus move
@@ -174,14 +174,7 @@ class GroupHomeDetail(ft.Container):
             spacing=12,
             run_spacing=12,
         )
-        # Right-click on the free space between the cards opens the manager.
-        # Cards sit inside this detector and swallow their own right-click.
-        self._grid_click = ft.GestureDetector(
-            content=self._widgets_grid,
-            on_secondary_tap_down=lambda e: self._open_manager(),
-            expand=True,
-        )
-        # Always-visible way in, for people who never right-click.
+        # Always-visible way in: the pencil next to the title.
         self._add_button = ft.IconButton(
             icon=ft.Icons.EDIT,
             tooltip="Widgets bearbeiten",
@@ -211,7 +204,7 @@ class GroupHomeDetail(ft.Container):
                     ],
                 ),
                 ft.Divider(color=ft.Colors.OUTLINE_VARIANT),
-                self._grid_click,
+                self._widgets_grid,
             ],
         )
 
@@ -258,8 +251,6 @@ class GroupHomeDetail(ft.Container):
             widget.set_group(self._group)
             self._widgets_grid.controls.append(self._wrap(key, widget))
         if not self._widgets_grid.controls:
-            # No card would swallow the right-click, so the empty-space menu
-            # still works; the hint just says where to look.
             self._widgets_grid.controls.append(self._empty_hint())
 
     def _wrap(self, key: str, widget: HomeWidget) -> ft.GestureDetector:
@@ -273,7 +264,7 @@ class GroupHomeDetail(ft.Container):
         """Shown when every widget is hidden, so the page is not blank."""
         return ft.Container(
             content=ft.Text(
-                "Keine Widgets. Stift oben rechts oder Rechtsklick hier.",
+                "Keine Widgets. Stift oben rechts.",
                 size=13,
                 color=ft.Colors.OUTLINE,
             ),
@@ -283,7 +274,7 @@ class GroupHomeDetail(ft.Container):
         )
 
     def _open_manager(self, e=None):
-        """Open the widget list: pencil button or right-click on empty space."""
+        """Open the widget list: pencil button in the title row."""
         if self._manager is None:
             return
         self._manager.reset(self._order())
