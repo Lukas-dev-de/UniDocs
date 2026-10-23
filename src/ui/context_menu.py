@@ -15,7 +15,17 @@ Usage
     ])
 """
 
+import asyncio
+
 import flet as ft
+
+# Pop-in when the menu is opened: it fades and grows from the cursor corner.
+_POP_IN = ft.Animation(120, ft.AnimationCurve.EASE_OUT)
+_POP_SCALE = ft.Scale(scale=0.94, alignment=ft.Alignment.TOP_LEFT)
+_POP_OPEN_SCALE = ft.Scale(scale=1.0, alignment=ft.Alignment.TOP_LEFT)
+# One frame (16 ms) is enough for the client to build the menu in its closed
+# state; only then does changing opacity/scale animate instead of snap.
+_POP_FRAME = 0.016
 
 class ContextMenu(ft.Stack):
     def __init__(self):
@@ -34,6 +44,10 @@ class ContextMenu(ft.Stack):
             padding=ft.Padding.symmetric(vertical=4),
             left=0,
             top=0,
+            opacity=0.0,
+            scale=_POP_SCALE,
+            animate_opacity=_POP_IN,
+            animate_scale=_POP_IN,
         )
 
         # full-screen click catcher
@@ -76,8 +90,31 @@ class ContextMenu(ft.Stack):
         self.menu_container.left = x
         self.menu_container.top = y
 
+        # Start from the "closed" state so every open animates, not just the
+        # first one. The 0-opacity frame is invisible, so no flicker.
+        self.menu_container.opacity = 0.0
+        self.menu_container.scale = _POP_SCALE
         self.visible = True
         self.update()
+
+        # A hidden control is built fresh on the client, so setting the target
+        # values in the same batch would just render it open - no transition.
+        # Animating one frame later gives the client time to show the closed
+        # state first.
+        page = self.page
+        if page is not None:
+            page.run_task(self._play_pop_in)
+        else:
+            self._open_now()
+
+    def _open_now(self):
+        self.menu_container.opacity = 1.0
+        self.menu_container.scale = _POP_OPEN_SCALE
+        self.update()
+
+    async def _play_pop_in(self):
+        await asyncio.sleep(_POP_FRAME)
+        self._open_now()
 
     def hide(self):
         self.visible = False
