@@ -24,7 +24,9 @@ import flet as ft
 from app_storage.ics import WEEKDAYS
 from ui.components.home_widgets.base import HomeWidget
 
-# Rows shown on the card; the overlay lists the whole week.
+# Rows shown on the card; the overlay lists the whole week. The card body
+# scrolls when the card is too short for that many rows (the grid gives every
+# card the same cell height), so nothing gets clipped at the bottom.
 CARD_ROWS = 4
 
 # Colour choices for an entry; the hex value is what gets stored.
@@ -294,6 +296,10 @@ class ScheduleWidget(HomeWidget):
         self._dialog = None
         self._week_column = None
         self._week_dialog = None
+
+        # The card's cell height comes from the grid, not from the row count,
+        # so a fourth entry would otherwise be cut off at the bottom.
+        self.body.scroll = ft.ScrollMode.AUTO
 
         self._maximize_btn = ft.IconButton(
             icon=ft.Icons.OPEN_IN_FULL,

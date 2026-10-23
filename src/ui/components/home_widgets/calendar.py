@@ -19,7 +19,9 @@ import flet as ft
 from app_storage.ics import ICSEvent, fetch_ics, format_when, parse_ics, upcoming
 from ui.components.home_widgets.base import HomeWidget
 
-# Rows on the card; the maximize overlay lists the full feed.
+# Rows on the card; the maximize overlay lists the full feed. The card body
+# scrolls when the card is too short for that many rows (the grid gives every
+# card the same cell height), so nothing gets clipped at the bottom.
 CARD_ROWS = 4
 FULL_ROWS = 100
 # Range the "visible events" card option may take.
@@ -49,6 +51,10 @@ class CalendarWidget(HomeWidget):
         self._settings_dialog = None
         self._full_column = None
         self._full_dialog = None
+
+        # The card's cell height comes from the grid, not from the row count,
+        # so the last entry would otherwise be cut off at the bottom.
+        self.body.scroll = ft.ScrollMode.AUTO
 
         self._maximize_btn = ft.IconButton(
             icon=ft.Icons.OPEN_IN_FULL,
