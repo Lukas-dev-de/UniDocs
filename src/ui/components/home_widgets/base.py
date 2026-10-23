@@ -3,9 +3,10 @@ ui/components/home_widgets/base.py
 ----------------------------------
 Base card for the widgets on a group's home page (see ui/group_home.py).
 
-A widget is a rounded surface card with a title row and a body. In edit mode
-the title row shows a gear that opens the widget's settings dialog; outside
-edit mode the card is read-only (or plain interactive, e.g. ticking a todo).
+A widget is a rounded surface card with a title row and a body. Configuring it
+happens through the card's right-click menu on the group home page, which calls
+:meth:`open_settings`; the card itself only adds its own title-row buttons
+(right-aligned in ``_actions_row``).
 
 Subclasses fill ``self.body`` in their ``__init__`` and override
 :meth:`refresh` (rebuild from the store) and optionally :meth:`open_settings`.
@@ -24,7 +25,7 @@ class HomeWidget(ft.Container):
     TITLE = "Widget"
     # Key of the widget type in .home.json (namespaces the widget's options).
     TYPE = ""
-    # False hides the gear even in edit mode (nothing to configure).
+    # False hides "Widget bearbeiten" in the right-click menu (nothing to set).
     HAS_SETTINGS = True
 
     def __init__(self, store: HomeStore, module_store=None, on_open_module=None):
@@ -37,7 +38,6 @@ class HomeWidget(ft.Container):
         self._on_open_module = on_open_module
         # Folder name of the group on screen; ``None`` = Home.
         self._group: str | None = None
-        self._edit_mode = False
 
         self.border_radius = 16
         # The home page itself paints SURFACE, so the card takes the next
@@ -47,16 +47,9 @@ class HomeWidget(ft.Container):
         self.border = ft.border.all(1, ft.Colors.OUTLINE_VARIANT)
         self.padding = 16
 
-        self._settings_btn = ft.IconButton(
-            icon=ft.Icons.SETTINGS,
-            icon_size=18,
-            tooltip="Einstellungen",
-            visible=False,
-            on_click=self.open_settings,
-        )
-        # Title-row buttons; subclasses may insert their own in front of the
-        # gear (e.g. the calendar's "maximize").
-        self._actions_row = ft.Row(spacing=0, controls=[self._settings_btn])
+        # Title-row buttons subclasses may fill (e.g. the calendar's
+        # "maximize"); empty by default.
+        self._actions_row = ft.Row(spacing=0, controls=[])
         self.body = ft.Column(spacing=8, expand=True)
         self.content = ft.Column(
             spacing=8,
@@ -80,10 +73,6 @@ class HomeWidget(ft.Container):
         self._group = group
         self.refresh()
 
-    def set_edit_mode(self, on: bool):
-        self._edit_mode = on
-        self._settings_btn.visible = on and self.HAS_SETTINGS
-
     def refresh(self):
         """Rebuild the body from the store. Subclasses override.
 
@@ -91,8 +80,21 @@ class HomeWidget(ft.Container):
         refreshing every card, which also works before the page is mounted.
         """
 
-    def open_settings(self, e):
+    def open_settings(self, e=None):
         """Open the widget's settings dialog. Subclasses override."""
+
+    def settings_dialog(self):
+        """The widget's settings dialog once it has been built, else ``None``.
+
+        Widgets keep it under ``_settings_dialog`` (todos, calendar) or
+        ``_dialog`` (quick links, timetable); both are covered so the home page
+        can add a "back" button without per-widget knowledge.
+        """
+        for attr in ("_settings_dialog", "_dialog"):
+            dialog = getattr(self, attr, None)
+            if dialog is not None:
+                return dialog
+        return None
 
     #  options 
 

@@ -173,42 +173,6 @@ Definition of done: alle Punkte per Logik-Test abgedeckt (ICS-Strings als
 Fixtures, kein Netz), Grenzen im Docstring, Klick-Anleitung.
 ```
 
-## Phase 7 – Qualität, Tests, Doku
-
-```
-Neuer Chat, UniDocs-Repo, Branch feature/….
-Lies HOME_WIDGETS_PHASES.md und schau in tools/ (dort liegen bereits
-*_smoke.py). Aufgabenvorschlag, vorher bestätigen lassen:
-- tools/home_widgets_smoke.py im Stil der vorhandenen Smoke-Tests: tempdir,
-  alle Widgets, Widget-Verwaltung, ICS-Fixtures.
-- .home.json: kaputtes JSON / fehlende Keys / unbekannte Keys -> Defaults,
-  Test dazu.
-- .home.json + Watcher: prüfen, dass Schreiben aus der App keinen Reload und
-  damit Modal-/Fokusverlust auslöst (analog .home.json-Handling, das in
-  module_store schon existiert).
-- CHANGELOG.md: Eintrag für die Startseiten-Widgets (neue Features, Verhalten).
-- README.md: kurzer Abschnitt zu Startseite/Widgets/.home.json, falls noch
-  nicht vorhanden.
-Definition of done: Smoke-Test läuft grün über ./.venv/bin/python
-tools/home_widgets_smoke.py, CHANGELOG-Eintrag, keine offenen TODOs im Code.
-```
-
-## Phase 8 – Vorlagen und Import/Export
-
-```
-Neuer Chat, UniDocs-Repo, Branch feature/….
-Lies HOME_WIDGETS_PHASES.md, dann home_store.py und group_home.py.
-
-Aufgabe: Gruppen-Konfiguration übertragbar machen.
-- In der .home.json eine Vorlage aus einer anderen Gruppe übernehmen
-  ("Widgets von <Gruppe> übernehmen"), Daten der Zielgruppe bleiben unberührt.
-- Default-Konfiguration aus config.json statt Code-Konstanten (welche Widgets
-  eine neue Gruppe startet).
-- Export/Import der Widget-Konfiguration als Datei (JSON), ohne Links/Todos,
-  wenn der Nutzer das so will – vorher fragen, welcher Umfang.
-Definition of done: Logik-Test (Kopie legt nur "widgets"/"widget_options" um),
-Klick-Anleitung, Doku der Dateistruktur.
-```
 
 ---
 

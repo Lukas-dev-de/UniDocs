@@ -10,9 +10,18 @@ module title does (except for Home, which has no folder and cannot be renamed).
 Below the title sits a grid of widgets (quick links, recent modules, todos,
 calendar, timetable - see ui/components/home_widgets/). Each group has its own
 widget config, stored in the group's ``.home.json`` (app_storage.home_store).
-The floating button in the bottom right switches the page between read-only and
-edit mode; in edit mode every configurable card shows a gear that opens its
-settings dialog. Documents are never listed here.
+
+There is no edit mode: everything hangs off the pencil button in the title row
+(and a right-click on the empty space between cards). It opens the widget
+manager - one row per widget type with a switch to show/hide it and a pencil to
+open that widget's settings, which in turn has a "Zurück" button leading back
+to the manager. A right-click on a card offers the same settings plus move
+up/down and "Ausblenden".
+
+Hiding a widget only takes it off the page - its data stays in the .home.json,
+so switching it back on restores the same content.
+
+Documents are never listed here.
 
     home = GroupHomeDetail(store=store, on_group_renamed=cb, on_open_module=cb2)
     home.set_group("School")   # or None for Home
@@ -49,46 +58,55 @@ _WIDGET_ICONS = {
 }
 
 
-class _WidgetPickerDialog(ft.AlertDialog):
-    """Lets the user add a widget type that is not on the page yet.
+class _WidgetManagerDialog(ft.AlertDialog):
+    """Lists every widget type with a show/hide switch and a settings button.
 
-    Only the still-available types are listed; every row adds on click. Adding
-    reopens the dialog with a refreshed list, so several can be added in a row.
+    The switch writes to the group's .home.json (``add_widget`` /
+    ``remove_widget``), so hiding a card keeps its content. The pencil opens
+    that widget's own settings dialog, which gets a "Zurück" button back here.
     """
 
-    def __init__(self, on_add):
-        self._on_add = on_add
+    def __init__(self, on_toggle, on_edit):
+        self._on_toggle = on_toggle
+        self._on_edit = on_edit
         self._column = ft.Column(
-            spacing=0, tight=True, scroll=ft.ScrollMode.AUTO, height=320
+            spacing=0, tight=True, scroll=ft.ScrollMode.AUTO, height=340
         )
         super().__init__(
             modal=True,
-            title=ft.Text("Widget hinzufügen"),
-            content=ft.Container(width=380, content=self._column),
-            actions=[
-                ft.TextButton("Schließen", on_click=lambda e: self.close())
-            ],
+            title=ft.Text("Widgets"),
+            content=ft.Container(width=400, content=self._column),
+            actions=[ft.TextButton("Fertig", on_click=lambda e: self.close())],
             actions_alignment=ft.MainAxisAlignment.END,
         )
 
-    def reset(self, available: list[tuple[str, str, str]]):
+    def reset(self, shown: list[str]):
+        """Rebuild one row per widget type; *shown* are the keys on the page."""
         self._column.controls.clear()
-        if not available:
+        for key, cls in _WIDGET_TYPES.items():
             self._column.controls.append(
-                ft.Text(
-                    "Alle Widgets sind schon auf der Seite.",
-                    size=13,
-                    color=ft.Colors.OUTLINE,
-                )
-            )
-            return
-        for key, title, icon in available:
-            self._column.controls.append(
-                ft.ListTile(
-                    leading=ft.Icon(icon, color=ft.Colors.PRIMARY),
-                    title=ft.Text(title),
-                    trailing=ft.Icon(ft.Icons.ADD),
-                    on_click=lambda e, k=key: self._on_add(k),
+                ft.Row(
+                    spacing=4,
+                    controls=[
+                        ft.Icon(
+                            _WIDGET_ICONS.get(key, ft.Icons.WIDGETS),
+                            size=18,
+                            color=ft.Colors.PRIMARY,
+                        ),
+                        ft.Text(cls.TITLE, size=13, expand=True),
+                        ft.Switch(
+                            value=key in shown,
+                            on_change=lambda e, k=key: self._on_toggle(
+                                k, e.control.value
+                            ),
+                        ),
+                        ft.IconButton(
+                            icon=ft.Icons.EDIT,
+                            icon_size=18,
+                            tooltip="Einstellungen",
+                            on_click=lambda e, k=key: self._on_edit(k),
+                        ),
+                    ],
                 )
             )
 
@@ -111,8 +129,6 @@ class GroupHomeDetail(ft.Container):
         self._on_open_module = on_open_module
         # Folder name of the group on screen; ``None`` = Home (UniDocs root).
         self._group: str | None = None
-        # Edit mode reveals the per-widget gear buttons; off = read-only.
-        self._edit_mode = False
 
         #  Title: text display + inline editor 
         self.title_text = ft.Text(
@@ -148,25 +164,28 @@ class GroupHomeDetail(ft.Container):
         }
         # Widget-management helpers; built in did_mount (they need the page).
         self._ctx_menu = None
-        self._picker = None
+        self._manager = None
+        # "Zurück" buttons injected into widget settings dialogs, keyed by
+        # widget key; created the first time the manager opens one.
+        self._back_buttons: dict[str, ft.TextButton] = {}
         self._widgets_grid = ft.GridView(
             expand=True,
             max_extent=360,
             spacing=12,
             run_spacing=12,
         )
-        self._edit_button = ft.FilledButton(
-            "Bearbeiten",
-            icon=ft.Icons.EDIT,
-            on_click=self._toggle_edit,
-        )
-        # The edit toggle floats above the grid in the bottom right corner.
-        self._grid_stack = ft.Stack(
+        # Right-click on the free space between the cards opens the manager.
+        # Cards sit inside this detector and swallow their own right-click.
+        self._grid_click = ft.GestureDetector(
+            content=self._widgets_grid,
+            on_secondary_tap_down=lambda e: self._open_manager(),
             expand=True,
-            controls=[
-                self._widgets_grid,
-                ft.Container(content=self._edit_button, right=16, bottom=16),
-            ],
+        )
+        # Always-visible way in, for people who never right-click.
+        self._add_button = ft.IconButton(
+            icon=ft.Icons.EDIT,
+            tooltip="Widgets bearbeiten",
+            on_click=self._open_manager,
         )
 
         #  Styling mirrors ModuleDetail so switching between the two is seamless. 
@@ -188,10 +207,11 @@ class GroupHomeDetail(ft.Container):
                                 ft.Row(controls=[self._title_click, self.title_field]),
                             ],
                         ),
+                        self._add_button,
                     ],
                 ),
                 ft.Divider(color=ft.Colors.OUTLINE_VARIANT),
-                self._grid_stack,
+                self._grid_click,
             ],
         )
 
@@ -202,18 +222,20 @@ class GroupHomeDetail(ft.Container):
         self._group = group or None
         self._show_title_text(self._group or "Home")
         self._title_click.tooltip = "Rename group" if self._group else "Home"
-        # Every group page starts read-only; staying in edit mode across a
-        # group switch would be surprising. _set_edit_mode rebuilds the grid.
-        self._set_edit_mode(False)
+        self._rebuild_widgets()
+        self.update()
 
     def did_mount(self):
         page = self.page
         if page is None:
             return
         self._ctx_menu = ContextMenu()
-        self._picker = _WidgetPickerDialog(self._add_widget)
+        self._manager = _WidgetManagerDialog(
+            on_toggle=self._toggle_widget,
+            on_edit=self._open_widget_settings,
+        )
         page.overlay.append(self._ctx_menu)
-        page.overlay.append(self._picker)
+        page.overlay.append(self._manager)
         page.update()
 
     #  widgets 
@@ -234,58 +256,105 @@ class GroupHomeDetail(ft.Container):
         for key in self._order():
             widget = self._widgets[key]
             widget.set_group(self._group)
-            widget.set_edit_mode(self._edit_mode)
             self._widgets_grid.controls.append(self._wrap(key, widget))
-        if self._edit_mode:
-            self._widgets_grid.controls.append(self._add_tile())
+        if not self._widgets_grid.controls:
+            # No card would swallow the right-click, so the empty-space menu
+            # still works; the hint just says where to look.
+            self._widgets_grid.controls.append(self._empty_hint())
 
     def _wrap(self, key: str, widget: HomeWidget) -> ft.GestureDetector:
-        """Card plus the right-click menu used to reorder/remove it."""
+        """Card plus the right-click menu used to edit/move/hide it."""
         return ft.GestureDetector(
             content=widget,
             on_secondary_tap_down=lambda e, k=key: self._show_widget_menu(e, k),
         )
 
-    def _add_tile(self) -> ft.Container:
-        """Edit-mode-only cell that opens the widget picker."""
+    def _empty_hint(self) -> ft.Container:
+        """Shown when every widget is hidden, so the page is not blank."""
         return ft.Container(
-            content=ft.Column(
-                alignment=ft.MainAxisAlignment.CENTER,
-                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                spacing=6,
-                controls=[
-                    ft.Icon(ft.Icons.ADD, color=ft.Colors.OUTLINE),
-                    ft.Text("Widget hinzufügen", size=13, color=ft.Colors.OUTLINE),
-                ],
+            content=ft.Text(
+                "Keine Widgets. Stift oben rechts oder Rechtsklick hier.",
+                size=13,
+                color=ft.Colors.OUTLINE,
             ),
-            padding=ft.padding.symmetric(vertical=32, horizontal=16),
+            padding=24,
             border_radius=16,
-            bgcolor=ft.Colors.SURFACE_CONTAINER_HIGH,
             border=ft.border.all(1, ft.Colors.OUTLINE_VARIANT),
-            ink=True,
-            tooltip="Widget hinzufügen",
-            on_click=self._open_picker,
         )
 
-    def _available(self) -> list[tuple[str, str, str]]:
-        """(key, title, icon) for every widget type not on the page yet."""
-        shown = set(self._order())
-        return [
-            (key, cls.TITLE, _WIDGET_ICONS.get(key, ft.Icons.WIDGETS))
-            for key, cls in _WIDGET_TYPES.items()
-            if key not in shown
-        ]
-
-    def _open_picker(self, e=None):
-        if self._picker is None:
+    def _open_manager(self, e=None):
+        """Open the widget list: pencil button or right-click on empty space."""
+        if self._manager is None:
             return
-        self._picker.reset(self._available())
-        self._picker.open = True
+        self._manager.reset(self._order())
+        self._manager.open = True
         self.page.update()
 
+    def _toggle_widget(self, key: str, on: bool):
+        """Show/hide a widget type from the manager's switch.
+
+        The dialog stays open so several types can be flipped in a row; the
+        grid behind it is rebuilt immediately.
+        """
+        if on:
+            self._home.add_widget(self._group, key)
+        else:
+            self._home.remove_widget(self._group, key)
+        self._rebuild_widgets()
+        self.update()
+
+    def _open_widget_settings(self, key: str):
+        """Manager -> one widget's settings, with a way back to the manager."""
+        if self._manager is not None:
+            self._manager.open = False
+        self._show_settings(key, with_back=True)
+
+    def _open_card_settings(self, key: str):
+        """Card right-click -> settings; there is no manager to go back to."""
+        self._show_settings(key, with_back=False)
+
+    def _show_settings(self, key: str, with_back: bool):
+        """Open a widget's settings and add/show its "Zurück" button.
+
+        The settings dialogs belong to the widgets themselves, so the back
+        button is injected into their ``actions`` on first use and only made
+        visible when the manager opened the dialog.
+        """
+        widget = self._widgets[key]
+        widget.open_settings()
+        back = self._back_buttons.get(key)
+        if back is None and with_back:
+            dialog = widget.settings_dialog()
+            if dialog is not None:
+                back = ft.TextButton(
+                    "Zurück",
+                    icon=ft.Icons.ARROW_BACK,
+                    on_click=lambda e, k=key: self._back_to_manager(k),
+                )
+                back.visible = False
+                self._back_buttons[key] = back
+                dialog.actions = [back] + list(dialog.actions or [])
+        if back is not None:
+            back.visible = with_back
+        self.page.update()
+
+    def _back_to_manager(self, key: str):
+        """Leave a widget's settings and return to the widget list."""
+        dialog = self._widgets[key].settings_dialog()
+        if dialog is not None:
+            dialog.open = False
+        back = self._back_buttons.get(key)
+        if back is not None:
+            back.visible = False
+        self._open_manager()
+
     def _show_widget_menu(self, e, key: str):
-        """Right-click menu on a card: move up/down, remove (edit mode only)."""
-        if not self._edit_mode or self._ctx_menu is None:
+        """Right-click menu on a card: settings, move, hide.
+
+        Every entry is lambda-bound so the menu can be built once per open and
+        still act on the card it was opened on.
+        """
+        if self._ctx_menu is None:
             return
         order = self._order()
         if key not in order:
@@ -299,20 +368,30 @@ class GroupHomeDetail(ft.Container):
             if index < len(order) - 1
             else None
         )
-        self._ctx_menu.show(
-            e.global_position.x,
-            e.global_position.y,
-            [
-                ("Nach oben", ft.Icons.ARROW_UPWARD, ft.Colors.ON_SURFACE, move_up),
-                ("Nach unten", ft.Icons.ARROW_DOWNWARD, ft.Colors.ON_SURFACE, move_down),
+        items = []
+        # "Widget bearbeiten" only for cards that have something to configure.
+        # open_settings ignores the event, hence the lambda.
+        widget = self._widgets[key]
+        if widget.HAS_SETTINGS:
+            items.append(
                 (
-                    "Entfernen",
-                    ft.Icons.VISIBILITY_OFF,
-                    ft.Colors.ERROR,
-                    lambda: self._remove_widget(key),
-                ),
-            ],
-        )
+                    "Widget bearbeiten",
+                    ft.Icons.SETTINGS,
+                    ft.Colors.ON_SURFACE,
+                    lambda: self._open_card_settings(key),
+                )
+            )
+        items += [
+            ("Nach oben", ft.Icons.ARROW_UPWARD, ft.Colors.ON_SURFACE, move_up),
+            ("Nach unten", ft.Icons.ARROW_DOWNWARD, ft.Colors.ON_SURFACE, move_down),
+            (
+                "Ausblenden",
+                ft.Icons.VISIBILITY_OFF,
+                ft.Colors.ERROR,
+                lambda: self._remove_widget(key),
+            ),
+        ]
+        self._ctx_menu.show(e.global_position.x, e.global_position.y, items)
 
     def _move_widget(self, key: str, delta: int):
         self._home.move_widget(self._group, key, delta)
@@ -320,30 +399,12 @@ class GroupHomeDetail(ft.Container):
         self.update()
 
     def _remove_widget(self, key: str):
-        """Hide a widget again - its data stays in the .home.json."""
-        self._home.remove_widget(self._group, key)
-        self._rebuild_widgets()
-        self.update()
+        """Hide a widget - its data stays in the .home.json.
 
-    def _add_widget(self, key: str):
-        self._home.add_widget(self._group, key)
-        self._rebuild_widgets()
-        self.update()
-        if self._picker is not None:
-            self._picker.reset(self._available())
-
-    def _toggle_edit(self, e):
-        self._set_edit_mode(not self._edit_mode)
-
-    def _set_edit_mode(self, on: bool):
-        """Show/hide every card's gear and label the toggle accordingly.
-
-        Also rebuilds the grid, because the "add widget" tile only exists
-        while editing.
+        Nothing is deleted: the widget's options and its entries survive, so
+        switching the type back on in the manager shows the same content.
         """
-        self._edit_mode = on
-        self._edit_button.text = "Fertig" if on else "Bearbeiten"
-        self._edit_button.icon = ft.Icons.CHECK if on else ft.Icons.EDIT
+        self._home.remove_widget(self._group, key)
         self._rebuild_widgets()
         self.update()
 
