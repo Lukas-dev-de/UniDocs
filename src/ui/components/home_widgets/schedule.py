@@ -349,30 +349,32 @@ class ScheduleWidget(HomeWidget):
         for entry in upcoming[:CARD_ROWS]:
             self.body.controls.append(self._entry_row(entry, now))
 
-    def _entry_row(self, entry: dict, now: datetime) -> ft.Row:
+    def _entry_row(self, entry: dict, now: datetime) -> ft.Container:
         today = _next_start(entry, now).date() == now.date()
-        accent = entry["color"] if today else ft.Colors.ON_SURFACE_VARIANT
-        label = ("Heute " if today else f"{WEEKDAYS[entry['day']]} ") + (
-            f"{entry['start']}–{entry['end']}"
-        )
-        details = [
-            ft.Text(
-                entry["title"],
-                size=13,
-                weight=ft.FontWeight.BOLD if today else ft.FontWeight.NORMAL,
-                max_lines=1,
-                overflow=ft.TextOverflow.ELLIPSIS,
-            )
-        ]
+        day_label = "Heute" if today else WEEKDAYS[entry["day"]]
+        meta = f"{day_label} · {entry['start']}–{entry['end']}"
         if entry["room"]:
-            details.append(ft.Text(entry["room"], size=11, color=ft.Colors.OUTLINE))
-        return ft.Row(
-            spacing=8,
-            vertical_alignment=ft.CrossAxisAlignment.START,
-            controls=[
-                ft.Text(label, size=12, color=accent, width=132),
-                ft.Column(spacing=0, tight=True, expand=True, controls=details),
-            ],
+            meta += f" · {entry['room']}"
+        return ft.Container(
+            padding=ft.padding.symmetric(vertical=8, horizontal=10),
+            border_radius=8,
+            border=ft.border.all(
+                1, entry["color"] if today else ft.Colors.OUTLINE_VARIANT
+            ),
+            content=ft.Column(
+                spacing=2,
+                tight=True,
+                controls=[
+                    ft.Text(
+                        entry["title"],
+                        size=13,
+                        weight=ft.FontWeight.BOLD if today else ft.FontWeight.W_500,
+                        max_lines=1,
+                        overflow=ft.TextOverflow.ELLIPSIS,
+                    ),
+                    ft.Text(meta, size=11, color=ft.Colors.OUTLINE),
+                ],
+            ),
         )
 
     #  week overlay 
