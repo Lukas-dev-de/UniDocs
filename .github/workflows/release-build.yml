@@ -154,22 +154,25 @@ jobs:
       # ------------------------------------------------------------------
       # Platform prerequisites for the build machine
       # ------------------------------------------------------------------
-      # Same package set Flet uses for its own builds. The gstreamer/libmpv
-      # packages are only needed for flet-audio/flet-video; UniDocs builds
-      # with desktop_flavor = "light", so they can be dropped if this step
-      # ever becomes a problem.
-      - name: Install Linux build dependencies
+      # The minimal set `flet build linux --desktop-flavor light` needs. The
+      # gstreamer/libmpv/ffmpeg packages Flet's own docs list are only for
+      # flet-audio/flet-video, which this app does not use - and they drag in
+      # 220+ extra packages. That used to make this step take over an hour when
+      # the azure.archive.ubuntu.com mirror stalled on single downloads, so the
+      # list stays short.
+      #
+      # The cache action keys on the package list + `version`; bump `version`
+      # whenever the list changes, otherwise the stale cache wins. If it ever
+      # breaks, replacing it with the plain `sudo apt-get update && sudo
+      # apt-get install -y --no-install-recommends <same list>` works too.
+      - name: Cache and install Linux build dependencies
         if: matrix.target == 'linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            binutils clang cmake ninja-build pkg-config llvm lld \
-            libgtk-3-dev libsecret-1-dev libunwind-dev libasound2-dev libmpv-dev \
-            libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
-            gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
-            gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly \
-            gstreamer1.0-libav gstreamer1.0-tools gstreamer1.0-gl \
-            gstreamer1.0-gtk3 gstreamer1.0-pulseaudio
+        uses: awalsh128/cache-apt-pkgs-action@v1.6.3
+        with:
+          packages: >-
+            binutils clang cmake ninja-build pkg-config llvm lld
+            libgtk-3-dev libsecret-1-dev libunwind-dev libasound2-dev
+          version: 1.0
 
       # `flet build macos` builds a universal bundle, which for the Intel half
       # needs Rosetta 2 on the arm64 runners.
