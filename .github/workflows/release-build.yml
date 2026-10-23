@@ -98,7 +98,13 @@ jobs:
       matrix:
         include:
           - name: Linux
-            os: ubuntu-latest
+            # Pinned, not ubuntu-latest: the 26.04 image (ubuntu-latest since
+            # ~Oct 2026) ships a newer clang/glibc that trips -Werror in the
+            # serious_python C build - pyconfig.h redefines _POSIX_C_SOURCE and
+            # _XOPEN_SOURCE, which now counts as an error. 24.04 is the image
+            # every earlier successful Linux release was built on. Unpin only
+            # after a test build on the newer image passes.
+            os: ubuntu-24.04
             target: linux
             asset: UniDocs-linux-x86_64.tar.gz
             # The Linux job also produces UniDocs-linux-x86_64.AppImage and
