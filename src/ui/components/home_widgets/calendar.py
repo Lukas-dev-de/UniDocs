@@ -13,6 +13,7 @@ maximize button opens the same list, with more rows, as an overlay.
 from __future__ import annotations
 
 import threading
+from datetime import datetime
 
 import flet as ft
 
@@ -152,19 +153,44 @@ class CalendarWidget(HomeWidget):
                 )
             )
 
-    def _event_row(self, event: ICSEvent) -> ft.Row:
-        details = [
-            ft.Text(event.summary, size=13, max_lines=2, overflow=ft.TextOverflow.ELLIPSIS)
-        ]
+    def _event_row(self, event: ICSEvent) -> ft.Container:
+        """One entry: title on top, when and where underneath.
+
+        Same shape as the timetable card (schedule.py), so the two cards read
+        alike: coloured frame, bold title, grey detail line.
+        """
+        today = event.start.astimezone().date() == datetime.now().date()
+        meta = format_when(event)
+        if event.end is not None and not event.all_day:
+            meta += f"–{event.end.astimezone():%H:%M}"
         if event.location:
-            details.append(ft.Text(event.location, size=11, color=ft.Colors.OUTLINE))
-        return ft.Row(
-            spacing=8,
-            vertical_alignment=ft.CrossAxisAlignment.START,
-            controls=[
-                ft.Text(format_when(event), size=12, color=ft.Colors.ON_SURFACE_VARIANT, width=92),
-                ft.Column(spacing=0, tight=True, expand=True, controls=details),
-            ],
+            meta += f" · {event.location}"
+        return ft.Container(
+            padding=ft.padding.symmetric(vertical=8, horizontal=10),
+            border_radius=8,
+            border=ft.border.all(
+                1, ft.Colors.PRIMARY if today else ft.Colors.OUTLINE_VARIANT
+            ),
+            content=ft.Column(
+                spacing=2,
+                tight=True,
+                controls=[
+                    ft.Text(
+                        event.summary,
+                        size=13,
+                        weight=ft.FontWeight.BOLD if today else ft.FontWeight.W_500,
+                        max_lines=1,
+                        overflow=ft.TextOverflow.ELLIPSIS,
+                    ),
+                    ft.Text(
+                        meta,
+                        size=11,
+                        color=ft.Colors.OUTLINE,
+                        max_lines=1,
+                        overflow=ft.TextOverflow.ELLIPSIS,
+                    ),
+                ],
+            ),
         )
 
     #  settings 
