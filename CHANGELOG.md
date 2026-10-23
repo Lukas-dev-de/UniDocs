@@ -4,9 +4,13 @@
 - change:
     - Linux: updates install themselves on far more setups now, including a `flet run` checkout. The updater no longer unpacks the archive into the app folder on its own; it runs the release's own `install.sh`, which always installs into `~/.local/share/unidocs`
     - Linux update dialog: the install button is called "Install automatically", and a "Manually" button next to it opens the release page for a hand-picked download
+    - home page: the timetable and the calendar card scroll when the card is too short for the entries they show, instead of cutting the last one off
+    - home page: calendar entries look like timetable entries now - the title on top, the day, time and room underneath
 - fix:
     - Linux: running from source, or from a folder the app cannot write to, no longer left the update as a browser download only
     - settings menu: the two columns no longer squeeze the System / Light / Dark switch onto two lines; the dialog falls back to a single stacked column before the switch gets that narrow, and on very narrow windows the switch shows icons only
+    - home page: calendar card showed "Keine anstehenden Termine." for feeds that only hold repeating entries (a Google timetable, for example). Such series are unrolled into their next dates now, honouring the skipped dates and moved single dates the feed carries
+    - home page: calendar times kept the UTC offset of today instead of the zone the feed names, so appointments after the daylight-saving switch were off by an hour
 
 ## v2.4.2
 - new:
