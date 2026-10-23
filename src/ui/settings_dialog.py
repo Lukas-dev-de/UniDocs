@@ -6,7 +6,7 @@ import updater
 from ui.theme import MODE_LABELS, PALETTES, ThemeManager
 from ui.update_install import UpdateInstaller
 
-CURRENT_VERSION = "2.4.3"
+CURRENT_VERSION = "2.5.0"
 
 # The settings body is a two-column layout. The columns must never get
 # narrower than the widest control in them - the System / Light / Dark switch -

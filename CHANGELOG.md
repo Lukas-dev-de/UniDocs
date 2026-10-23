@@ -1,7 +1,16 @@
 # CHANGELOG
 
-## v2.4.3
+## v2.5.0
+- new:
+    - groups: modules can be collected in groups. The sidebar got a compact group selector that switches between Home and any group and creates new ones, and the module list only shows the group that is open
+    - every group, and Home, has its own start page with widgets: quick links, to-dos, recently opened modules, timetable and calendar
+    - widgets can be added, removed and reordered by drag and drop; editing them lives behind the edit button in the top right corner of the start page
+    - settings: switch to reopen the last group and module on startup
 - change:
+    - settings: the UniDocs location field is gone, and Cancel / Apply became a single Back button
+    - module tiles and buttons animate on hover
+    - the timetable in full view spaces its entries by their actual time
+    - sidebar: modules can be dragged into another order, and a group's start page is reached from the sidebar or the group menu
     - Linux: updates install themselves on far more setups now, including a `flet run` checkout. The updater no longer unpacks the archive into the app folder on its own; it runs the release's own `install.sh`, which always installs into `~/.local/share/unidocs`
     - Linux update dialog: the install button is called "Install automatically", and a "Manually" button next to it opens the release page for a hand-picked download
     - home page: the timetable and the calendar card scroll when the card is too short for the entries they show, instead of cutting the last one off
