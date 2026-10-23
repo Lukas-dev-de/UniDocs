@@ -54,8 +54,9 @@ class CalendarWidget(HomeWidget):
         self._full_dialog = None
 
         # The card's cell height comes from the grid, not from the row count,
-        # so the last entry would otherwise be cut off at the bottom.
-        self.body.scroll = ft.ScrollMode.AUTO
+        # so the last entry would otherwise be cut off at the bottom. The body
+        # scrolls edge to edge, so the scrollbar sits on the card's right side.
+        self.enable_body_scroll()
 
         self._maximize_btn = ft.IconButton(
             icon=ft.Icons.OPEN_IN_FULL,
@@ -143,7 +144,7 @@ class CalendarWidget(HomeWidget):
             return
         limit = self._row_limit()
         for event in self._events[:limit]:
-            self.body.controls.append(self._event_row(event))
+            self.add_body_row(self._event_row(event))
         if len(self._events) > limit:
             self.body.controls.append(
                 ft.Text(

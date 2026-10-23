@@ -315,8 +315,9 @@ class ScheduleWidget(HomeWidget):
         self._week_dialog = None
 
         # The card's cell height comes from the grid, not from the row count,
-        # so a fourth entry would otherwise be cut off at the bottom.
-        self.body.scroll = ft.ScrollMode.AUTO
+        # so a fourth entry would otherwise be cut off at the bottom. The body
+        # scrolls edge to edge, so the scrollbar sits on the card's right side.
+        self.enable_body_scroll()
 
         self._maximize_btn = ft.IconButton(
             icon=ft.Icons.OPEN_IN_FULL,
@@ -370,7 +371,7 @@ class ScheduleWidget(HomeWidget):
         now = datetime.now()
         upcoming = sorted(entries, key=lambda entry: _next_start(entry, now))
         for entry in upcoming[:CARD_ROWS]:
-            self.body.controls.append(self._entry_row(entry, now))
+            self.add_body_row(self._entry_row(entry, now))
 
     def _entry_row(self, entry: dict, now: datetime) -> ft.Container:
         today = _next_start(entry, now).date() == now.date()

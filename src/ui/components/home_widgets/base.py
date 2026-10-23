@@ -51,19 +51,20 @@ class HomeWidget(ft.Container):
         # "maximize"); empty by default.
         self._actions_row = ft.Row(spacing=0, controls=[])
         self.body = ft.Column(spacing=8, expand=True)
+        title_row = ft.Row(
+            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+            controls=[
+                ft.Text(self.TITLE, size=16, weight=ft.FontWeight.BOLD),
+                self._actions_row,
+            ],
+        )
+        # Title row in its own container: enable_body_scroll() drops the card's
+        # right padding and hands that gutter to the title row instead.
+        self._title_row = ft.Container(content=title_row, padding=0)
         self.content = ft.Column(
             spacing=8,
             expand=True,
-            controls=[
-                ft.Row(
-                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-                    controls=[
-                        ft.Text(self.TITLE, size=16, weight=ft.FontWeight.BOLD),
-                        self._actions_row,
-                    ],
-                ),
-                self.body,
-            ],
+            controls=[self._title_row, self.body],
         )
 
     #  public 
@@ -95,6 +96,30 @@ class HomeWidget(ft.Container):
             if dialog is not None:
                 return dialog
         return None
+
+    #  scrolling 
+
+    def enable_body_scroll(self) -> None:
+        """Let the body scroll, with the scrollbar on the card's right edge.
+
+        The card keeps its padding on the left, top and bottom, but not on the
+        right: the body then runs edge to edge, so Flutter draws the scrollbar
+        on the card's border instead of 16px inside it. Rows stay inset via
+        :meth:`add_body_row`, the title row gets its gutter back here.
+        """
+        self.padding = ft.Padding.only(left=16, top=16, bottom=16)
+        self._title_row.padding = ft.Padding.only(right=16)
+        self.body.scroll = ft.ScrollMode.AUTO
+        # Stretched children give the body the full card width, so the scroll
+        # viewport - and with it the scrollbar - ends at the card's edge even
+        # when the rows themselves are narrower.
+        self.body.horizontal_alignment = ft.CrossAxisAlignment.STRETCH
+
+    def add_body_row(self, control) -> None:
+        """Append a row to the body, inset from the scrollbar's side."""
+        self.body.controls.append(
+            ft.Container(content=control, padding=ft.Padding.only(right=16))
+        )
 
     #  options 
 
