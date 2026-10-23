@@ -6,9 +6,10 @@ Card with the group's weekly timetable.
 Entries are plain rows in the group's .home.json (weekday, from/to, title,
 room, colour); nothing is fetched from the network. The card lists the next
 upcoming entries with their time, the maximize button opens the whole week as
-a Monday-to-Friday grid (Saturday/Sunday columns appear only when they hold
-entries). In edit mode the gear opens a dialog that adds, edits and removes
-entries.
+a real week calendar: an hour gutter on the left, one column per day, and every
+entry drawn at its clock time with a height for its duration (Monday to Friday
+always, Saturday/Sunday only when they hold entries). In edit mode the gear
+opens a dialog that adds, edits and removes entries.
 
     entry = {"id": ..., "day": 0, "start": "08:15", "end": "09:45",
              "title": "Analysis", "room": "HS 2", "color": "#1565C0"}
@@ -41,6 +42,22 @@ PALETTE = [
 
 # Accent used when an entry carries no (valid) colour.
 DEFAULT_COLOR = "#1565C0"
+
+#  week overlay geometry 
+
+# Width of the week grid inside the overlay; the day columns are computed from
+# it, so the Stack inside each column has a known width for its positioned
+# children (left=0/right=0 needs a bounded Stack).
+WEEK_WIDTH = 820
+# Height of one hour on the grid: an entry sits at its start and is as tall as
+# its duration.
+HOUR_HEIGHT = 52
+# Hour labels left of the day columns.
+TIME_GUTTER_WIDTH = 44
+# Gap between the columns; the hour lines of each day stop at the gap.
+DAY_GAP = 6
+# An entry box never gets thinner than this, or the title would vanish.
+MIN_SLOT_HEIGHT = 26
 
 
 #  time helpers 
@@ -391,13 +408,17 @@ class ScheduleWidget(HomeWidget):
             return
 
         if self._week_dialog is None:
-            self._week_column = ft.Column(
-                spacing=8, scroll=ft.ScrollMode.AUTO, height=520
-            )
+            # Fixed height so the grid body can scroll on its own; the weekday
+            # header sits above it and stays put while scrolling.
+            self._week_column = ft.Column(expand=True, spacing=0)
             self._week_dialog = ft.AlertDialog(
                 modal=True,
                 title=ft.Text("Stundenplan"),
-                content=ft.Container(width=760, content=self._week_column),
+                content=ft.Container(
+                    width=WEEK_WIDTH,
+                    height=520,
+                    content=self._week_column,
+                ),
                 actions=[
                     ft.TextButton(
                         "Schließen", on_click=lambda e: self._close_week_view()
@@ -413,65 +434,188 @@ class ScheduleWidget(HomeWidget):
         self._week_dialog.open = True
         page.update()
 
-    def _week_grid(self) -> ft.Row:
+    @staticmethod
+    def _time_window(entries: list[dict]) -> tuple[int, int]:
+        """First and last minute the grid has to cover (full hours)."""
+        if not entries:
+            return 8 * 60, 18 * 60
+        first = min(_minutes(entry["start"]) for entry in entries) // 60 * 60
+        last_raw = max(_minutes(entry["end"]) for entry in entries)
+        last = -(-last_raw // 60) * 60  # round up to the next full hour
+        return first, max(last, first + 60)
+
+    def _week_grid(self) -> ft.Column:
+        """Week overlay as a time grid: vertical position = clock time."""
         entries = self._entries()
         now = datetime.now()
         # Monday to Friday always; the weekend only when something sits there.
         days = [0, 1, 2, 3, 4]
         days += [d for d in (5, 6) if any(entry["day"] == d for entry in entries)]
 
-        columns = []
-        for day in days:
-            rows = sorted(
-                (entry for entry in entries if entry["day"] == day),
-                key=lambda entry: entry["start"],
-            )
-            header_color = (
-                ft.Colors.PRIMARY
-                if day == now.weekday()
-                else ft.Colors.ON_SURFACE_VARIANT
-            )
-            cells = [
-                ft.Text(
-                    WEEKDAYS[day],
-                    size=12,
-                    weight=ft.FontWeight.BOLD,
-                    color=header_color,
+        first, last = self._time_window(entries)
+        height = (last - first) / 60 * HOUR_HEIGHT
+        day_width = (
+            WEEK_WIDTH - TIME_GUTTER_WIDTH - DAY_GAP * len(days)
+        ) / len(days)
+
+        header = ft.Row(
+            spacing=DAY_GAP,
+            controls=[ft.Container(width=TIME_GUTTER_WIDTH)]
+            + [
+                ft.Container(
+                    width=day_width,
+                    alignment=ft.Alignment.CENTER,
+                    content=ft.Text(
+                        WEEKDAYS[day],
+                        size=12,
+                        weight=ft.FontWeight.BOLD,
+                        color=(
+                            ft.Colors.PRIMARY
+                            if day == now.weekday()
+                            else ft.Colors.ON_SURFACE_VARIANT
+                        ),
+                    ),
                 )
-            ]
-            cells.extend(self._chip(entry) for entry in rows)
-            if not rows:
-                cells.append(self.placeholder("–"))
-            columns.append(ft.Column(expand=True, spacing=6, controls=cells))
-        return ft.Row(
-            spacing=8,
-            vertical_alignment=ft.CrossAxisAlignment.START,
-            controls=columns,
+                for day in days
+            ],
         )
 
-    def _chip(self, entry: dict) -> ft.Container:
+        gutter = ft.Container(
+            width=TIME_GUTTER_WIDTH,
+            height=height,
+            content=ft.Stack(
+                width=TIME_GUTTER_WIDTH,
+                height=height,
+                controls=[
+                    ft.Container(
+                        top=max((hour * 60 - first) / 60 * HOUR_HEIGHT - 7, 0),
+                        right=6,
+                        content=ft.Text(
+                            f"{hour:02d}", size=10, color=ft.Colors.OUTLINE
+                        ),
+                    )
+                    for hour in range(first // 60, last // 60 + 1)
+                ],
+            ),
+        )
+
+        columns = [gutter]
+        for day in days:
+            columns.append(
+                ft.Container(
+                    width=day_width,
+                    height=height,
+                    content=ft.Stack(
+                        width=day_width,
+                        height=height,
+                        controls=self._day_slots(entries, day, first, last, height),
+                    ),
+                )
+            )
+
+        # Header outside the scroller: the weekday row must stay visible while
+        # the grid body scrolls (in Flet 0.84 only Row/Column scroll, Container
+        # does not).
+        return ft.Column(
+            expand=True,
+            spacing=6,
+            controls=[
+                header,
+                ft.Column(
+                    expand=True,
+                    spacing=0,
+                    scroll=ft.ScrollMode.AUTO,
+                    controls=[
+                        ft.Row(
+                            spacing=DAY_GAP,
+                            vertical_alignment=ft.CrossAxisAlignment.START,
+                            controls=columns,
+                        )
+                    ],
+                ),
+            ],
+        )
+
+    def _day_slots(
+        self,
+        entries: list[dict],
+        day: int,
+        first: int,
+        last: int,
+        height: float,
+    ) -> list[ft.Control]:
+        """Hour lines plus the entries of one day, positioned by their time."""
+        controls: list[ft.Control] = [
+            ft.Container(
+                top=(hour * 60 - first) / 60 * HOUR_HEIGHT,
+                left=0,
+                right=0,
+                height=1,
+                bgcolor=ft.Colors.OUTLINE_VARIANT,
+            )
+            for hour in range(first // 60, last // 60 + 1)
+        ]
+
+        for entry in sorted(
+            (entry for entry in entries if entry["day"] == day),
+            key=lambda entry: entry["start"],
+        ):
+            start = _minutes(entry["start"])
+            end = _minutes(entry["end"])
+            controls.append(
+                self._slot(
+                    entry,
+                    top=(start - first) / 60 * HOUR_HEIGHT,
+                    height=max((end - start) / 60 * HOUR_HEIGHT, MIN_SLOT_HEIGHT),
+                )
+        )
+        return controls
+
+    def _slot(self, entry: dict, top: float, height: float) -> ft.Container:
+        """One entry drawn at its clock time and as tall as its duration.
+
+        Small boxes drop the time and room lines so the title always fits; the
+        container clips instead of overflowing.
+        """
         details = [
             ft.Text(
                 entry["title"],
-                size=12,
+                size=11,
                 weight=ft.FontWeight.W_500,
-                max_lines=2,
+                max_lines=2 if height >= 44 else 1,
                 overflow=ft.TextOverflow.ELLIPSIS,
-            ),
-            ft.Text(
-                f"{entry['start']}–{entry['end']}",
-                size=10,
-                color=ft.Colors.OUTLINE,
-            ),
+            )
         ]
-        if entry["room"]:
-            details.append(ft.Text(entry["room"], size=10, color=ft.Colors.OUTLINE))
+        if height >= 36:
+            details.append(
+                ft.Text(
+                    f"{entry['start']}–{entry['end']}",
+                    size=10,
+                    color=ft.Colors.OUTLINE,
+                    max_lines=1,
+                )
+            )
+        if height >= 62 and entry["room"]:
+            details.append(
+                ft.Text(
+                    entry["room"],
+                    size=10,
+                    color=ft.Colors.OUTLINE,
+                    max_lines=1,
+                )
+            )
+
         return ft.Container(
-            padding=8,
-            border_radius=8,
+            top=top,
+            left=0,
+            right=0,
+            height=height,
+            padding=ft.padding.symmetric(horizontal=6, vertical=2),
+            border_radius=6,
             bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST,
-            border=ft.border.only(left=ft.BorderSide(4, entry["color"])),
-            content=ft.Column(spacing=2, tight=True, controls=details),
+            border=ft.border.only(left=ft.BorderSide(3, entry["color"])),
+            clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
+            content=ft.Column(spacing=0, tight=True, controls=details),
         )
 
     def _close_week_view(self):
