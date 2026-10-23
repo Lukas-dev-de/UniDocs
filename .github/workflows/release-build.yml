@@ -165,20 +165,28 @@ jobs:
       # flet-audio/flet-video, which this app does not use - and they drag in
       # 220+ extra packages. That used to make this step take over an hour when
       # the azure.archive.ubuntu.com mirror stalled on single downloads, so the
-      # list stays short.
+      # list stays short (this step now runs in about a minute).
       #
-      # The cache action keys on the package list + `version`; bump `version`
-      # whenever the list changes, otherwise the stale cache wins. If it ever
-      # breaks, replacing it with the plain `sudo apt-get update && sudo
-      # apt-get install -y --no-install-recommends <same list>` works too.
-      - name: Cache and install Linux build dependencies
+      # No apt cache action on purpose: awalsh128/cache-apt-pkgs-action restored
+      # a cache created on the 26.04 image into a 24.04 job, reported success
+      # and left libgtk-3-dev missing, so the build died in pkg_check_modules.
+      # 40 saved seconds are not worth that failure mode.
+      - name: Install Linux build dependencies
         if: matrix.target == 'linux'
-        uses: awalsh128/cache-apt-pkgs-action@v1.6.3
-        with:
-          packages: >-
-            binutils clang cmake ninja-build pkg-config llvm lld
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            binutils clang cmake ninja-build pkg-config llvm lld \
             libgtk-3-dev libsecret-1-dev libunwind-dev libasound2-dev
-          version: 1.0
+
+      # Cheap guard: fails here instead of deep inside the CMake configure if a
+      # toolchain package did not land.
+      - name: Verify Linux toolchain
+        if: matrix.target == 'linux'
+        run: |
+          pkg-config --modversion gtk+-3.0 libsecret-1
+          cmake --version | head -1
+          clang --version | head -1
 
       # `flet build macos` builds a universal bundle, which for the Intel half
       # needs Rosetta 2 on the arm64 runners.
