@@ -13,7 +13,7 @@ widget config, stored in the group's ``.home.json`` (app_storage.home_store).
 
 There is no edit mode: everything hangs off the pencil button in the title row.
 It opens the widget
-manager - one row per widget type with a switch to show/hide it and a pencil to
+manager - one row per widget type with a checkbox to show/hide it and a pencil to
 open that widget's settings, which in turn has a "Zurück" button leading back
 to the manager. Rows are shown in page order and can be dragged up/down to
 change that order (HomeStore.set_widget_order). A right-click on a card offers
@@ -60,9 +60,9 @@ _WIDGET_ICONS = {
 
 
 class _WidgetManagerDialog(ft.AlertDialog):
-    """Lists every widget type with a show/hide switch and a settings button.
+    """Lists every widget type with a show/hide checkbox and a settings button.
 
-    The switch writes to the group's .home.json (``add_widget`` /
+    The checkbox writes to the group's .home.json (``add_widget`` /
     ``remove_widget``), so hiding a card keeps its content. The pencil opens
     that widget's own settings dialog, which gets a "Zurück" button back here.
     """
@@ -116,7 +116,7 @@ class _WidgetManagerDialog(ft.AlertDialog):
             self._list.controls.append(self._row(key, key in shown))
 
     def _row(self, key: str, on: bool) -> ft.Row:
-        """One widget line: icon, title, on/off switch, settings, drag grip."""
+        """One widget line: icon, show/hide checkbox, title, settings, grip."""
         cls = _WIDGET_TYPES[key]
         return ft.Row(
             spacing=4,
@@ -124,22 +124,25 @@ class _WidgetManagerDialog(ft.AlertDialog):
             controls=[
                 ft.Icon(
                     _WIDGET_ICONS.get(key, ft.Icons.WIDGETS),
-                    size=18,
+                    size=24,
                     color=ft.Colors.PRIMARY,
                 ),
-                ft.Text(cls.TITLE, size=13, expand=True),
-                ft.Switch(
+                # Checkbox instead of a switch: less visual weight in a list
+                # of otherwise quiet rows.
+                ft.Checkbox(
                     value=on,
+                    tooltip="Auf der Seite anzeigen",
                     on_change=lambda e, k=key: self._on_toggle(k, e.control.value),
                 ),
+                ft.Text(cls.TITLE, size=13, expand=True),
                 ft.IconButton(
                     icon=ft.Icons.EDIT,
                     icon_size=18,
                     tooltip="Einstellungen",
                     on_click=lambda e, k=key: self._on_edit(k),
                 ),
-                # Only the grip starts a drag, so a tap on the switch or the
-                # pencil never moves the row by accident.
+                # Only the grip starts a drag, so a tap on the checkbox or
+                # the pencil never moves the row by accident.
                 ft.ReorderableDragHandle(
                     mouse_cursor=ft.MouseCursor.GRAB,
                     content=ft.Icon(
@@ -343,7 +346,7 @@ class GroupHomeDetail(ft.Container):
         self.page.update()
 
     def _toggle_widget(self, key: str, on: bool):
-        """Show/hide a widget type from the manager's switch.
+        """Show/hide a widget type from the manager's checkbox.
 
         The dialog stays open so several types can be flipped in a row; the
         grid behind it is rebuilt immediately.
