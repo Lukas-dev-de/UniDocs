@@ -14,7 +14,7 @@ previews the current colour and opens a popup grid of swatches.
 
 import flet as ft
 
-from ui.theme import MODULE_COLORS, on_color
+from ui.theme import MODULE_COLORS
 
 
 class ColorSelector(ft.Container):

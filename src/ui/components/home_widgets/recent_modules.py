@@ -56,7 +56,7 @@ class RecentModulesWidget(HomeWidget):
                     ),
                 ],
             ),
-            padding=ft.padding.symmetric(horizontal=8, vertical=6),
+            padding=ft.Padding.symmetric(horizontal=8, vertical=6),
             border_radius=8,
             ink=True,
             tooltip=module.title,

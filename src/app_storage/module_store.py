@@ -32,14 +32,20 @@ a tag never breaks existing assignments.
 from __future__ import annotations
 
 import json
+import shutil
 import threading
+import uuid
 from pathlib import Path
 
 import flet as ft
 
+from app_storage.io_utils import write_json
+from app_logging import get_logger
 from models.module import Module
 from models.document import Document
 from models.tag import Tag, DEFAULT_TAG_COLOR
+
+log = get_logger(__name__)
 
 UNIDOCS_DIR = Path(__file__).parent.parent / "UniDocs"
 META_FILENAME = ".meta"
@@ -52,8 +58,53 @@ GROUP_MARKER_FILENAME = ".group"
 HOME_FILENAME = ".home.json"
 _DEFAULT_ICON_NAME = "FOLDER"
 
+# ``ft.Icons`` value -> attribute name, filled on first use (see _icon_names).
+_ICON_NAME_CACHE: dict | None = None
+_ICON_CACHE_LOCK = threading.Lock()
+
+# -- folder names ------------------------------------------------------------
+
+# Characters Windows forbids in a file name. macOS and Linux allow most of
+# them, but a folder name has to work on every OS the app runs on.
+ILLEGAL_CHARS = '\\/:*?"<>|'
+
+# Device names Windows refuses as a file/folder name, with or without an
+# extension ("CON.txt" is just as invalid as "CON").
+_WINDOWS_RESERVED = {
+    "CON",
+    "PRN",
+    "AUX",
+    "NUL",
+    *(f"COM{i}" for i in range(1, 10)),
+    *(f"LPT{i}" for i in range(1, 10)),
+}
+
+# Longest folder name the stores generate. Far below the 255-byte filesystem
+# limit, but leaves room for a suffix on the path as a whole.
+MAX_NAME_LENGTH = 100
+
 
 # -- icon helpers ------------------------------------------------------------
+
+def _icon_names() -> dict:
+    """Map every ``ft.Icons`` value to its attribute name, built once.
+
+    Scanning ``dir(ft.Icons)`` on every module load was measurable in the
+    sidebar, so the mapping is built on first use and kept.
+    """
+    global _ICON_NAME_CACHE
+    with _ICON_CACHE_LOCK:
+        if _ICON_NAME_CACHE is None:
+            cache: dict = {}
+            for attr in dir(ft.Icons):
+                try:
+                    cache.setdefault(getattr(ft.Icons, attr), attr)
+                except Exception as ex:
+                    log.debug("Skipping unreadable icon attribute %r: %s", attr, ex)
+                    continue
+            _ICON_NAME_CACHE = cache
+        return _ICON_NAME_CACHE
+
 
 def _icon_to_name(icon_value) -> str:
     if icon_value is None:
@@ -61,13 +112,11 @@ def _icon_to_name(icon_value) -> str:
     name = getattr(icon_value, "name", None)
     if name:
         return name
-    for attr in dir(ft.Icons):
-        try:
-            if getattr(ft.Icons, attr) == icon_value:
-                return attr
-        except Exception:
-            pass
-    return _DEFAULT_ICON_NAME
+    try:
+        return _icon_names().get(icon_value, _DEFAULT_ICON_NAME)
+    except TypeError as ex:  # unhashable value, cannot be an icon
+        log.debug("Unhashable icon value %r, using default: %s", icon_value, ex)
+        return _DEFAULT_ICON_NAME
 
 
 def _name_to_icon(name: str):
@@ -150,7 +199,6 @@ class ModuleStore:
         return folder
 
     def delete_module(self, module: Module):
-        import shutil
         folder = self._folder_for(module)
         if folder.exists():
             shutil.rmtree(folder)
@@ -226,10 +274,8 @@ class ModuleStore:
         written.
         """
         base = self._group_dir(group)
-        base.mkdir(parents=True, exist_ok=True)
-        (base / ORDER_FILENAME).write_text(
-            json.dumps([_safe_name(title) for title in titles], ensure_ascii=False, indent=2),
-            encoding="utf-8",
+        write_json(
+            base / ORDER_FILENAME, [_safe_name(title) for title in titles]
         )
 
     # -- groups ---------------------------------------------------------------
@@ -298,7 +344,6 @@ class ModuleStore:
 
     def add_document(self, module: Module, src_path: Path) -> Document:
         """Copy *src_path* into the module's folder and return a Document."""
-        import shutil
         folder = self._folder_for(module)
         folder.mkdir(parents=True, exist_ok=True)
         dest = folder / src_path.name
@@ -379,12 +424,13 @@ class ModuleStore:
             return []
         # migrate old list-of-strings format
         if isinstance(raw[0], str):
-            import uuid
-            raw = [{"id": str(uuid.uuid4()), "name": n, "color": DEFAULT_TAG_COLOR} for n in raw]
+            raw = [
+                {"id": str(uuid.uuid4()), "name": n, "color": DEFAULT_TAG_COLOR}
+                for n in raw
+            ]
             self._write_global_tags(raw)
         # migrate old {name, color} format (no id)
         elif "id" not in raw[0]:
-            import uuid
             for entry in raw:
                 entry.setdefault("id", str(uuid.uuid4()))
             self._write_global_tags(raw)
@@ -401,7 +447,6 @@ class ModuleStore:
 
     def add_global_tag(self, name: str, color: str | None = None) -> dict:
         """Add a new tag to the global registry. Returns the new tag dict."""
-        import uuid
         with self._cache_lock:
             tags = self.load_all_tags()
             # prevent duplicate names
@@ -557,19 +602,20 @@ class ModuleStore:
             return None
 
         icon_name = meta.get("icon", _DEFAULT_ICON_NAME)
-        module = Module(
+        module = Module.from_meta(
             title=folder.name,
-            description=meta.get("description", ""),
+            meta=meta,
             icon=_name_to_icon(icon_name),
-            # Absent (or null) for modules created before v2.3.0 → follows theme.
-            color=meta.get("color") or None,
             group=group,
         )
+        if not meta.get("id"):
+            # Module from before 2.5.1: keep the id we just generated, so it
+            # is the same on every later load.
+            self._write_meta(folder, module)
 
         # build id→Tag lookup from the live global registry
         tag_map: dict[str, Tag] = {
-            t["id"]: Tag(t["id"], t["name"], t["color"])
-            for t in self.load_all_tags()
+            t["id"]: Tag.from_dict(t) for t in self.load_all_tags()
         }
 
         doc_tags_map = self._read_doc_tags(folder)
@@ -590,13 +636,9 @@ class ModuleStore:
         return module
 
     def _write_meta(self, folder: Path, module: Module):
-        meta = {
-            "description": module.description,
-            "icon": _icon_to_name(module.icon or _DEFAULT_ICON_NAME),
-            "color": module.color,
-        }
-        (folder / META_FILENAME).write_text(
-            json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8"
+        write_json(
+            folder / META_FILENAME,
+            module.to_meta(_icon_to_name(module.icon or _DEFAULT_ICON_NAME)),
         )
 
     def _read_doc_tags(self, folder: Path) -> dict:
@@ -607,18 +649,34 @@ class ModuleStore:
             return {}
 
     def _write_doc_tags(self, folder: Path, data: dict) -> None:
-        (folder / DOC_TAGS_FILENAME).write_text(
-            json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
-        )
+        write_json(folder / DOC_TAGS_FILENAME, data)
 
     def _write_global_tags(self, tags: list[dict]) -> None:
         with self._cache_lock:
-            (self.root / GLOBAL_TAGS_FILENAME).write_text(
-                json.dumps(tags, ensure_ascii=False, indent=2), encoding="utf-8"
-            )
+            write_json(self.root / GLOBAL_TAGS_FILENAME, tags)
             self._tags_cache = tags
 
 
 def _safe_name(title: str) -> str:
-    illegal = r'\/:*?"<>|'
-    return "".join(c for c in title if c not in illegal).strip() or "Untitled"
+    """Turn a module/group title into a folder name that is safe everywhere.
+
+    Dropped: the characters Windows forbids (``\\ / : * ? " < > |``), control
+    characters, and trailing dots/spaces (Windows silently strips those, so
+    two names would otherwise end up in one folder).
+
+    ``.`` and ``..`` are refused explicitly: they would make the module
+    folder the parent of the UniDocs root, and ``delete_module`` would remove
+    the lot. Empty results fall back to ``"Untitled"``, names Windows
+    reserves (``CON``, ``NUL``, ``COM1``, …) get a trailing underscore.
+    """
+    cleaned = "".join(
+        c for c in title if c not in ILLEGAL_CHARS and c >= " " and c != "\x7f"
+    )
+    cleaned = cleaned.strip().rstrip(". ")
+    if len(cleaned) > MAX_NAME_LENGTH:
+        cleaned = cleaned[:MAX_NAME_LENGTH].rstrip(". ")
+    if not cleaned or cleaned in {".", ".."}:
+        return "Untitled"
+    if cleaned.split(".")[0].strip().upper() in _WINDOWS_RESERVED:
+        cleaned = f"{cleaned}_"
+    return cleaned

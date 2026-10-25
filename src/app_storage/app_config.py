@@ -1,7 +1,16 @@
 """
 storage/app_config.py
 ---------------------
-Reads and writes a config.json file next to main.py.
+Reads and writes the user's ``config.json``.
+
+Location
+--------
+The file lives in the per-user config folder (``platformdirs``):
+``%LOCALAPPDATA%/UniDocs`` on Windows, ``~/Library/Application Support/UniDocs``
+on macOS, ``~/.config/UniDocs`` on Linux. A bundled install (Program Files,
+``/Applications``, an AppImage) cannot write next to the code, so the old
+location was not usable there. A ``config.json`` found next to the code is
+copied over once on first start (see ``AppConfig._migrate_legacy``).
 
 config.json example
 -------------------
@@ -30,16 +39,31 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from platformdirs import user_documents_dir
+from platformdirs import user_config_dir, user_documents_dir
 
-# Always sits next to main.py, regardless of where the script is run from
-_CONFIG_PATH = Path(__file__).parent.parent / "config.json"
+from app_storage.io_utils import write_json
+
+# Per-user config folder; the file has to be writable after a normal install.
+# ``appauthor=False`` keeps Windows from nesting a second "UniDocs" folder.
+_CONFIG_PATH = Path(user_config_dir("UniDocs", appauthor=False)) / "config.json"
+
+# Where versions up to 2.5.0 kept the file: next to the code. Read once and
+# copied to the new location, never written to again.
+_LEGACY_CONFIG_PATH = Path(__file__).parent.parent / "config.json"
+
 _DEFAULT_UNIDOCS = Path(user_documents_dir()) / "UniDocs"
 
 class AppConfig:
-    def __init__(self, config_path: Path = _CONFIG_PATH):
-        self._path = config_path
+    def __init__(self, config_path: Path | None = None):
+        """Load the config, migrating the old location when in default use.
+
+        Passing *config_path* (tests, tools) skips the migration and touches
+        no file outside that path.
+        """
+        self._path = Path(config_path) if config_path is not None else _CONFIG_PATH
         self._data: dict = {}
+        if config_path is None:
+            self._migrate_legacy()
         self._load()
 
     #  public properties 
@@ -141,8 +165,30 @@ class AppConfig:
     def _load(self):
         try:
             self._data = json.loads(self._path.read_text(encoding="utf-8"))
-        except (FileNotFoundError, json.JSONDecodeError):
+        except (FileNotFoundError, json.JSONDecodeError, OSError):
             self._data = {}
+        if not isinstance(self._data, dict):
+            self._data = {}
+
+    def _migrate_legacy(self) -> None:
+        """Copy a ``config.json`` next to the code to the per-user folder.
+
+        Runs once: if the new file exists already nothing happens. The old
+        file is left untouched (it may sit in a read-only install folder
+        anyway) and only ever read.
+        """
+        if self._path.exists() or not _LEGACY_CONFIG_PATH.exists():
+            return
+        try:
+            data = json.loads(_LEGACY_CONFIG_PATH.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return
+        if not isinstance(data, dict):
+            return
+        try:
+            write_json(self._path, data)
+        except OSError:
+            pass  # config folder not writable -> start with defaults
 
     def _set(self, key: str, value):
         """Write one key and save.
@@ -157,7 +203,4 @@ class AppConfig:
         self._save()
 
     def _save(self):
-        self._path.write_text(
-            json.dumps(self._data, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
+        write_json(self._path, self._data)

@@ -32,6 +32,10 @@ from dataclasses import dataclass, replace
 from datetime import datetime, time, timedelta, timezone
 from pathlib import Path
 
+from app_logging import get_logger
+
+log = get_logger(__name__)
+
 try:  # zoneinfo ships with Python 3.9+, but the tz data may be absent.
     from zoneinfo import ZoneInfo
 except ImportError:  # pragma: no cover - only very old Pythons
@@ -81,8 +85,8 @@ def local_tz():
     if name and ZoneInfo is not None:
         try:
             return ZoneInfo(name)
-        except Exception:
-            pass
+        except Exception as ex:
+            log.debug("Unknown local timezone %r (%s), using UTC", name, ex)
     return datetime.now().astimezone().tzinfo or timezone.utc
 
 
@@ -91,8 +95,8 @@ def zone_for(tzid: str):
     if tzid and ZoneInfo is not None:
         try:
             return ZoneInfo(tzid)
-        except Exception:
-            pass
+        except Exception as ex:
+            log.debug("Unknown TZID %r (%s), using local time", tzid, ex)
     return local_tz()
 
 
@@ -106,11 +110,12 @@ def _local_zone_name() -> str | None:
         target = os.path.realpath("/etc/localtime")
         if "zoneinfo/" in target:
             return target.split("zoneinfo/", 1)[1]
-    except OSError:
-        pass
+    except OSError as ex:
+        log.debug("Could not resolve /etc/localtime: %s", ex)
     try:
         name = Path("/etc/timezone").read_text(encoding="utf-8").strip()
-    except OSError:
+    except OSError as ex:
+        log.debug("Could not read /etc/timezone: %s", ex)
         return None
     return name or None
 

@@ -1,6 +1,6 @@
 [project]
 name = "unidocs"
-version = "2.5.0" # keep in sync with src/ui/settings_dialog.py and CHANGELOG.md - see tools/check_version.py
+version = "2.5.0" # keep in sync with src/app_info.py and CHANGELOG.md - see tools/check_version.py
 description = "Document management and productivity application"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -9,11 +9,11 @@ authors = [
 ]
 # Exact flet pins, no ranges. The bundled Python flet MUST have the same
 # version as the client shell, and `flet build` takes the shell from the
-# flet-cli version (see FLET_CLI_VERSION in .github/workflows/release-build.yml).
+# flet-cli version. This block is the single source for that number: the build
+# workflows read it via tools/flet_pin.py, nothing else pins flet.
 # flet 1.0 changed the socket wire format (4-byte length prefix + type byte
 # instead of a raw msgpack stream), so a mismatched pair talks past each other
-# and the app window stays blank. Bump all four pins together with the
-# workflow env values, never just one.
+# and the app window stays blank. Bump all four pins together, never just one.
 dependencies = [
     "flet==0.84.0",
     "watchdog>=6.0.0",
@@ -25,7 +25,26 @@ dev = [
     "flet-cli==0.84.0",
     "flet-desktop==0.84.0",
     "flet-web==0.84.0",
+    "pytest>=8.0",
+    "ruff>=0.6",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+exclude = ["build", ".venv", "src/assets", "src/UniDocs"]
+
+[tool.ruff.lint]
+# Deliberately narrow: real bugs (unused imports/names, syntax errors, wrong
+# comparisons) instead of a style rewrite of the whole codebase.
+select = ["E4", "E7", "E9", "F"]
+
+[tool.ruff.lint.per-file-ignores]
+# Smoke scripts and tests set up sys.path before importing app modules.
+"tools/*.py" = ["E402"]
+"tests/*.py" = ["E402"]
 
 [tool.flet]
 desktop_flavor = "light"    # Change to "full" to use flet-audio and flet-video

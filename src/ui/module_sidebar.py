@@ -9,7 +9,10 @@ from models.module import Module
 from app_storage.app_config import AppConfig
 from app_storage.module_store import ModuleStore
 from app_storage.home_store import HomeStore
+from app_logging import get_logger
 from ui.theme import ThemeManager
+
+log = get_logger(__name__)
 
 
 @ft.control
@@ -73,7 +76,7 @@ class ModuleSidebar(ft.Container):
             width=40,
             height=1,
             bgcolor=ft.Colors.OUTLINE_VARIANT,
-            margin=ft.margin.symmetric(vertical=8),
+            margin=ft.Margin.symmetric(vertical=8),
         )
 
         self.content = ft.Column(
@@ -457,6 +460,14 @@ class ModuleSidebar(ft.Container):
         if self._delete_confirm_cb:
             self._delete_confirm_cb()
 
+    def show_error(self, message: str):
+        page = self.page
+        if page is None:
+            log.error("Cannot show error (no page): %s", message)
+            return
+        # Flet 0.80+: snack bars are dialogs now (no page.show_snack_bar).
+        page.show_dialog(ft.SnackBar(content=ft.Text(message)))
+
     #  module actions 
 
     def _module_edit(self, module: Module):
@@ -477,7 +488,8 @@ class ModuleSidebar(ft.Container):
             try:
                 self._store.delete_module(module)
             except Exception as ex:
-                print(f"Delete failed: {ex}")
+                log.exception("Deleting module %r failed", module.title)
+                self.show_error(f"Delete failed: {ex}")
             self._reload_and_update()
         self._open_delete_dialog(
             f'Delete "{module.title}" and all its documents? This cannot be undone.',
@@ -494,8 +506,10 @@ class ModuleSidebar(ft.Container):
             # Called from the watchdog thread: hop onto the page's event loop
             # (``run_task`` needs a coroutine function).
             page.run_task(self._reload_and_update_async)
-        except Exception:
-            pass
+        except Exception as ex:
+            # Runs on the watchdog thread; during shutdown the page is already
+            # gone, so this is expected noise, not an error.
+            log.debug("Skipping sidebar refresh after fs change: %s", ex)
 
     async def _reload_and_update_async(self):
         self._reload_and_update()

@@ -44,7 +44,7 @@ class HomeWidget(ft.Container):
         # elevation step up ("raised") to stand out from it in both modes.
         # Its inner items use SURFACE_CONTAINER_HIGHEST, one step above this.
         self.bgcolor = ft.Colors.SURFACE_CONTAINER_HIGH
-        self.border = ft.border.all(1, ft.Colors.OUTLINE_VARIANT)
+        self.border = ft.Border.all(1, ft.Colors.OUTLINE_VARIANT)
         self.padding = 16
 
         # Title-row buttons subclasses may fill (e.g. the calendar's

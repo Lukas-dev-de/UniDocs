@@ -1,12 +1,14 @@
 import flet as ft
 from pathlib import Path
+from app_info import APP_VERSION, CHANGELOG_URL, ISSUES_URL, REPO_URL, RELEASES_URL
 from app_storage.module_store import ModuleStore
 from app_storage.app_config import AppConfig
+from app_logging import get_logger
 import updater
 from ui.theme import MODE_LABELS, PALETTES, ThemeManager
 from ui.update_install import UpdateInstaller
 
-CURRENT_VERSION = "2.5.0"
+log = get_logger(__name__)
 
 # The settings body is a two-column layout. The columns must never get
 # narrower than the widest control in them - the System / Light / Dark switch -
@@ -20,11 +22,6 @@ COMPACT_BREAKPOINT = 400    # below this: mode selector drops its text labels
 
 CONTENT_MIN_WIDTH = 300
 CONTENT_SIDE_MARGIN = 72    # dialog padding + a little breathing room
-
-REPO_URL = "https://github.com/Lukas-dev-de/UniDocs"
-RELEASES_URL = f"{REPO_URL}/releases"
-CHANGELOG_URL = f"{REPO_URL}/blob/main/CHANGELOG.md"
-ISSUES_URL = f"{REPO_URL}/issues"
 
 class SettingsDialog(ft.AlertDialog):
     """
@@ -288,7 +285,7 @@ class SettingsDialog(ft.AlertDialog):
                     self._link_row("Changelog", ft.Icons.DESCRIPTION, CHANGELOG_URL),
                     self._link_row("Report an issue", ft.Icons.BUG_REPORT_OUTLINED, ISSUES_URL),
                     ft.Text(
-                        f"Version {CURRENT_VERSION}",
+                        f"Version {APP_VERSION}",
                         size=12,
                         color=ft.Colors.ON_SURFACE_VARIANT,
                     ),
@@ -392,8 +389,10 @@ class SettingsDialog(ft.AlertDialog):
         if callable(prev):
             try:
                 prev(e)
-            except Exception:
-                pass
+            except Exception as ex:
+                # We chained onto someone else's handler; its crash must not
+                # take our dialog down, but it should not vanish either.
+                log.warning("Previous keyboard handler failed: %s", ex)
 
     #  helpers 
 
@@ -510,8 +509,10 @@ class SettingsDialog(ft.AlertDialog):
         if callable(prev):
             try:
                 prev(e)
-            except Exception:
-                pass
+            except Exception as ex:
+                # We chained onto someone else's handler; its crash must not
+                # take our dialog down, but it should not vanish either.
+                log.warning("Previous keyboard handler failed: %s", ex)
 
     def _apply(self, e):
         raw = self._path_field.value.strip()
@@ -609,7 +610,7 @@ class SettingsDialog(ft.AlertDialog):
             return
 
         try:
-            newer = updater.is_newer(release.version, CURRENT_VERSION)
+            newer = updater.is_newer(release.version, APP_VERSION)
         except updater.UpdateError as ex:
             self._set_update_status(f"Could not read the released version: {ex}", error=True)
             self.update()
@@ -617,7 +618,7 @@ class SettingsDialog(ft.AlertDialog):
 
         if not newer:
             self._set_update_status(
-                f"UniDocs {CURRENT_VERSION} is the latest version."
+                f"UniDocs {APP_VERSION} is the latest version."
             )
             self.update()
             return
@@ -626,7 +627,7 @@ class SettingsDialog(ft.AlertDialog):
 
         note = "" if self._update_asset else " (no download for this system)"
         self._set_update_status(
-            f"Version {release.version} is available — you have {CURRENT_VERSION}.{note}"
+            f"Version {release.version} is available — you have {APP_VERSION}.{note}"
         )
         self._notes_button.url = release.page_url
         self._notes_button.visible = True

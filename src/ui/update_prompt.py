@@ -28,13 +28,13 @@ import os
 import flet as ft
 
 import updater
+from app_info import APP_VERSION
 from app_storage.app_config import AppConfig
-from ui.settings_dialog import CURRENT_VERSION
 from ui.update_install import UpdateInstaller
 
 
 def current_version() -> str:
-    """``CURRENT_VERSION``, with a dev override for testing.
+    """``APP_VERSION``, with a dev override for testing.
 
     No release has to be published to try the update paths out:
 
@@ -45,7 +45,7 @@ def current_version() -> str:
     Same. Only the Windows setup installs itself in place; on Linux, macOS and
     for a plain zip the same button just opens the release page in the browser.
     """
-    return os.environ.get("UNIDOCS_FAKE_VERSION", "").strip() or CURRENT_VERSION
+    return os.environ.get("UNIDOCS_FAKE_VERSION", "").strip() or APP_VERSION
 
 
 class UpdatePrompt(ft.AlertDialog):

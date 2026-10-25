@@ -1,4 +1,5 @@
 import flet as ft
+from app_logging import get_logger, setup_logging
 from ui.module_detail import ModuleDetail
 from ui.group_home import GroupHomeDetail
 from ui.module_sidebar import ModuleSidebar
@@ -7,8 +8,14 @@ from ui.update_prompt import StartupUpdateCheck
 from app_storage.module_store import ModuleStore
 from app_storage.app_config import AppConfig
 
+log = get_logger(__name__)
+
 
 def main(page: ft.Page):
+    # Writes swallowed UI errors to the per-user log file (see app_logging).
+    setup_logging()
+    log.info("UniDocs starting")
+
     cfg = AppConfig()
     store = ModuleStore(root=cfg.unidocs_location)
 
@@ -49,15 +56,13 @@ def main(page: ft.Page):
     def on_module_update(module, previous_title):
         """Keep the detail view in sync after the sidebar edits a module.
 
-        Only the module that is actually on screen needs refreshing; the
-        comparison uses the pre-edit title because a rename changes the
-        module's title before this callback runs.
+        Matched by the module's stable id, so a rename (or a rename plus a
+        group change) still finds the module that is on screen. Only that
+        module needs refreshing; ``previous_title`` is no longer needed for
+        the match but stays part of the callback contract.
         """
-        if (
-            module_card.module is not None
-            and module_card.module.title == previous_title
-            and (module_card.module.group or None) == (module.group or None)
-        ):
+        shown = module_card.module
+        if shown is not None and shown.id == module.id:
             module_card.set_module(module)
 
     page.title = "UniDocs"

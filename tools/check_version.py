@@ -9,7 +9,7 @@ them, which is exactly what leads to a release whose files are labelled 2.2.0
 while the app shows 2.3.0:
 
     pyproject.toml              [project] version
-    src/ui/settings_dialog.py   CURRENT_VERSION (what the UI shows)
+    src/app_info.py             APP_VERSION (what the UI shows)
     CHANGELOG.md                newest "## vX.Y.Z" heading
 
 Usage
@@ -19,12 +19,12 @@ Usage
 
 Development check
     The newest CHANGELOG heading is taken as the version currently being
-    worked on. It must match ``CURRENT_VERSION``. A ``pyproject.toml`` that is
+    worked on. It must match ``APP_VERSION``. A ``pyproject.toml`` that is
     still on the previous release only produces a warning, because the version
     there is only bumped with the release commit.
 
 Strict check (used by the release workflow)
-    The tag, ``pyproject.toml``, ``CURRENT_VERSION`` and the newest CHANGELOG
+    The tag, ``pyproject.toml``, ``APP_VERSION`` and the newest CHANGELOG
     heading must all be identical, otherwise the script exits with 1 and the
     build stops before anything is published.
 
@@ -42,7 +42,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 PYPROJECT = ROOT / "pyproject.toml"
-SETTINGS_DIALOG = ROOT / "src" / "ui" / "settings_dialog.py"
+APP_INFO = ROOT / "src" / "app_info.py"
 CHANGELOG = ROOT / "CHANGELOG.md"
 
 # X.Y.Z with an optional pre-release / local suffix, e.g. 2.3.0 or 2.3.0-rc1
@@ -77,9 +77,9 @@ def read_pyproject_version() -> str | None:
         return normalize(match.group(1)) if match else None
 
 
-def read_settings_version() -> str | None:
-    text = SETTINGS_DIALOG.read_text(encoding="utf-8")
-    match = re.search(r'(?m)^CURRENT_VERSION\s*=\s*["\']([^"\']+)["\']', text)
+def read_app_version() -> str | None:
+    text = APP_INFO.read_text(encoding="utf-8")
+    match = re.search(r'(?m)^APP_VERSION\s*=\s*["\']([^"\']+)["\']', text)
     return normalize(match.group(1)) if match else None
 
 
@@ -106,7 +106,7 @@ def main(argv: list[str]) -> int:
 
     found: dict[str, str | None] = {
         "pyproject.toml": read_pyproject_version(),
-        "src/ui/settings_dialog.py": read_settings_version(),
+        "src/app_info.py": read_app_version(),
         "CHANGELOG.md (newest heading)": changelog_top,
     }
 

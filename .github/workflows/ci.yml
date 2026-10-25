@@ -1,0 +1,59 @@
+name: CI
+
+# Runs on every push to main and on every pull request: lint, tests and the
+# version check. No build here - that is release-build.yml's job.
+#
+# The runtime dependencies are read from pyproject.toml, so there is only one
+# place to bump a pin.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies from pyproject.toml
+        run: |
+          python - <<'PY' > /tmp/runtime-requirements.txt
+          try:
+              import tomllib
+          except ModuleNotFoundError:  # Python 3.10
+              import tomli as tomllib
+          with open("pyproject.toml", "rb") as handle:
+              deps = tomllib.load(handle)["project"]["dependencies"]
+          print("\n".join(deps))
+          PY
+          python -m pip install --upgrade pip
+          python -m pip install -r /tmp/runtime-requirements.txt tomli pytest ruff
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Tests
+        run: pytest -q
+
+      - name: Version check
+        run: python tools/check_version.py

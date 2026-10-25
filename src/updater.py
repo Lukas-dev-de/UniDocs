@@ -15,7 +15,7 @@ Usage
         release = fetch_latest()
     except UpdateError as ex:
         ...                                   # offline / no release / rate limit
-    if is_newer(release.version, CURRENT_VERSION):
+    if is_newer(release.version, APP_VERSION):
         asset = asset_for(release)            # (name, url) or None
         path = download(asset[1], temp_dir, progress=lambda done, total: ...)
         download_and_launch(asset)            # installs + restarts, then quit
@@ -38,10 +38,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
-# Keep in sync with REPO_URL in src/ui/settings_dialog.py.
-GITHUB_REPO = "Lukas-dev-de/UniDocs"
-RELEASES_PAGE = f"https://github.com/{GITHUB_REPO}/releases"
-API_LATEST_RELEASE = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
+from app_info import API_LATEST_RELEASE, RELEASES_URL
 
 # GitHub rejects requests without a User-Agent.
 USER_AGENT = "UniDocs-Updater"
@@ -159,7 +156,7 @@ def fetch_latest(timeout: float = 10.0) -> Release:
         version=tag.strip().lstrip("vV"),
         tag=tag,
         notes=data.get("body") or "",
-        page_url=data.get("html_url") or RELEASES_PAGE,
+        page_url=data.get("html_url") or RELEASES_URL,
         assets=assets,
     )
 

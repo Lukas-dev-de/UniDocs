@@ -32,6 +32,7 @@ import flet as ft
 
 from app_storage.module_store import ModuleStore
 from app_storage.home_store import HomeStore
+from app_logging import get_logger
 from ui.components.home_widgets.base import HomeWidget
 from ui.components.home_widgets.quick_links import QuickLinksWidget
 from ui.components.home_widgets.recent_modules import RecentModulesWidget
@@ -39,6 +40,8 @@ from ui.components.home_widgets.todos import TodosWidget
 from ui.components.home_widgets.calendar import CalendarWidget
 from ui.components.home_widgets.schedule import ScheduleWidget
 from ui.context_menu import ContextMenu
+
+log = get_logger(__name__)
 
 # Widget type name (as stored in .home.json) -> card class.
 _WIDGET_TYPES = {
@@ -334,7 +337,7 @@ class GroupHomeDetail(ft.Container):
             ),
             padding=24,
             border_radius=16,
-            border=ft.border.all(1, ft.Colors.OUTLINE_VARIANT),
+            border=ft.Border.all(1, ft.Colors.OUTLINE_VARIANT),
         )
 
     def _open_manager(self, e=None):
@@ -509,9 +512,10 @@ class GroupHomeDetail(ft.Container):
         try:
             new_name = self._store.rename_group(old_name, new_title)
         except Exception as ex:
-            print(f"Rename failed: {ex}")
+            log.exception("Renaming group %r to %r failed", old_name, new_title)
             self._show_title_text(self._group)
             self.update()
+            self.show_error(f"Rename failed: {ex}")
             return
 
         # Show the stored folder name: _safe_name may have dropped characters.
@@ -527,4 +531,9 @@ class GroupHomeDetail(ft.Container):
         self.title_field.visible = False
 
     def show_error(self, message: str):
-            self.page.show_snack_bar(ft.SnackBar(content=ft.Text(message)))
+        page = self.page
+        if page is None:
+            log.error("Cannot show error (no page): %s", message)
+            return
+        # Flet 0.80+: snack bars are dialogs now (no page.show_snack_bar).
+        page.show_dialog(ft.SnackBar(content=ft.Text(message)))

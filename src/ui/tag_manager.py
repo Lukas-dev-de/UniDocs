@@ -94,7 +94,8 @@ class TagManager:
 
     def _commit_tag_color(self, hex_color: str):
         self._close_dialog(self.color_dialog)
-        if not self.color_target: return
+        if not self.color_target:
+            return
         self.store.set_tag_color(self.color_target, hex_color)
         self.on_changed()
 

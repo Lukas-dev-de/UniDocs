@@ -5,8 +5,10 @@ A Tag has a stable UUID (id), a display name, and a color hex.
 Storing the id in .doc_tags means rename/recolor never orphans assignments.
 """
 from __future__ import annotations
+
 import re
 import uuid
+from dataclasses import dataclass
 
 DEFAULT_TAG_COLOR = "#1565C0"
 
@@ -25,16 +27,26 @@ def natural_sort_key(name: str) -> list:
     ]
 
 
+@dataclass
 class Tag:
-    def __init__(self, id: str, name: str, color: str = DEFAULT_TAG_COLOR):
-        self.id = id
-        self.name = name
-        self.color = color
+    id: str
+    name: str
+    color: str = DEFAULT_TAG_COLOR
 
     # convenience constructor used when creating a brand-new tag
     @classmethod
     def new(cls, name: str, color: str = DEFAULT_TAG_COLOR) -> "Tag":
         return cls(id=str(uuid.uuid4()), name=name, color=color)
 
-    def __repr__(self):
-        return f"Tag(id={self.id!r}, name={self.name!r}, color={self.color!r})"
+    #  serialisation (the shape used in tags.json and in the UI) 
+
+    def to_dict(self) -> dict:
+        return {"id": self.id, "name": self.name, "color": self.color}
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "Tag":
+        return cls(
+            id=data["id"],
+            name=data["name"],
+            color=data.get("color") or DEFAULT_TAG_COLOR,
+        )

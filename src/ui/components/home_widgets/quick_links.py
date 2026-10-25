@@ -208,7 +208,7 @@ class QuickLinksWidget(HomeWidget):
                     ft.Text(link.get("label") or link["url"], size=13),
                 ],
             ),
-            padding=ft.padding.symmetric(horizontal=12, vertical=8),
+            padding=ft.Padding.symmetric(horizontal=12, vertical=8),
             border_radius=10,
             bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST,
             ink=True,

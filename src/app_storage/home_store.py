@@ -26,6 +26,7 @@ import json
 import uuid
 from pathlib import Path
 
+from app_storage.io_utils import write_json
 from app_storage.module_store import HOME_FILENAME, _safe_name
 
 # Widget order a page starts with when it has no .home.json yet.
@@ -89,11 +90,7 @@ class HomeStore:
         return data
 
     def save(self, group: str | None, data: dict) -> None:
-        path = self._path(group)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(
-            json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
-        )
+        write_json(self._path(group), data)
 
     #  widgets 
 
@@ -194,7 +191,9 @@ class HomeStore:
 
     def remove_quick_link(self, group: str | None, link_id: str) -> None:
         data = self.load(group)
-        data["quick_links"] = [l for l in data["quick_links"] if l.get("id") != link_id]
+        data["quick_links"] = [
+            link for link in data["quick_links"] if link.get("id") != link_id
+        ]
         self.save(group, data)
 
     #  todos 

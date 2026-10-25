@@ -167,9 +167,9 @@ class CalendarWidget(HomeWidget):
         if event.location:
             meta += f" · {event.location}"
         return ft.Container(
-            padding=ft.padding.symmetric(vertical=8, horizontal=10),
+            padding=ft.Padding.symmetric(vertical=8, horizontal=10),
             border_radius=8,
-            border=ft.border.all(
+            border=ft.Border.all(
                 1, ft.Colors.PRIMARY if today else ft.Colors.OUTLINE_VARIANT
             ),
             content=ft.Column(

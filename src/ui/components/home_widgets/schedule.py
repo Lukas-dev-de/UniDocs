@@ -380,9 +380,9 @@ class ScheduleWidget(HomeWidget):
         if entry["room"]:
             meta += f" · {entry['room']}"
         return ft.Container(
-            padding=ft.padding.symmetric(vertical=8, horizontal=10),
+            padding=ft.Padding.symmetric(vertical=8, horizontal=10),
             border_radius=8,
-            border=ft.border.all(
+            border=ft.Border.all(
                 1, entry["color"] if today else ft.Colors.OUTLINE_VARIANT
             ),
             content=ft.Column(
@@ -611,10 +611,10 @@ class ScheduleWidget(HomeWidget):
             left=0,
             right=0,
             height=height,
-            padding=ft.padding.symmetric(horizontal=6, vertical=2),
+            padding=ft.Padding.symmetric(horizontal=6, vertical=2),
             border_radius=6,
             bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST,
-            border=ft.border.only(left=ft.BorderSide(3, entry["color"])),
+            border=ft.Border.only(left=ft.BorderSide(3, entry["color"])),
             clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
             content=ft.Column(spacing=0, tight=True, controls=details),
         )

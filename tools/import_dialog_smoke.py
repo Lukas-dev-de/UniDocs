@@ -18,8 +18,6 @@ from pathlib import Path
 SRC_DIR = Path(__file__).resolve().parent.parent / "src"
 sys.path.insert(0, str(SRC_DIR))
 
-import flet as ft  # noqa: E402
-
 from app_storage.module_store import ModuleStore  # noqa: E402
 from models.module import Module  # noqa: E402
 from ui.import_dialog import ImportDialog  # noqa: E402

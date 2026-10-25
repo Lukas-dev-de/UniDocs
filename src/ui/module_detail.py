@@ -1,4 +1,5 @@
 import flet as ft
+from app_logging import get_logger
 from models.module import Module
 from models.document import Document
 from models.tag import natural_sort_key
@@ -6,13 +7,13 @@ from app_storage.module_store import ModuleStore
 from ui.import_dialog import ImportDialog
 from ui.context_menu import ContextMenu
 from ui.tag_manager import TagManager
-from ui.components.tag_dialog import TagDialog
-from ui.components.tag_colors import TAG_PALETTE
 from ui.theme import on_color
 from ui.components.dialogs import ConfirmDialog, RenameDialog
 from pathlib import Path
 import subprocess
 import sys
+
+log = get_logger(__name__)
 
 
 @ft.control
@@ -211,7 +212,12 @@ class ModuleDetail(ft.Container):
     #  lifecycle 
 
     def show_error(self, message: str):
-        self.page.show_snack_bar(ft.SnackBar(content=ft.Text(message)))
+        page = self.page
+        if page is None:
+            log.error("Cannot show error (no page): %s", message)
+            return
+        # Flet 0.80+: snack bars are dialogs now (no page.show_snack_bar).
+        page.show_dialog(ft.SnackBar(content=ft.Text(message)))
 
     def did_mount(self):
         self._import_dialog.attach_to_page(self.page)
@@ -229,7 +235,9 @@ class ModuleDetail(ft.Container):
         try:
             self.page.on_keyboard_event = self._on_key_event
         except Exception as ex:
-            print(f"Keyboard events unavailable: {ex}")
+            # Not fatal: without the global hook, Shift/Ctrl range selection
+            # just falls back to plain clicks.
+            log.warning("Keyboard events unavailable: %s", ex)
 
         self.page.update()
 
@@ -251,8 +259,8 @@ class ModuleDetail(ft.Container):
 
         try:
             page.on_keyboard_event = None
-        except Exception:
-            pass
+        except Exception as ex:
+            log.debug("Could not clear keyboard handler: %s", ex)
 
     #  public 
 
@@ -301,7 +309,8 @@ class ModuleDetail(ft.Container):
             try:
                 self._store.rename_module(self.module, new_title)
             except Exception as ex:
-                print(f"Rename failed: {ex}")
+                log.exception("Renaming module %r to %r failed", self.module.title, new_title)
+                self.show_error(f"Rename failed: {ex}")
         self._show_title_text(self.module.title)
         self.update()
 
@@ -327,11 +336,18 @@ class ModuleDetail(ft.Container):
             self._show_desc_text("")
             self.update()
             return
+        previous_desc = self.module.description
         self.module.description = new_desc
         try:
             self._store.save_module(self.module)
         except Exception as ex:
-            print(f"Save description failed: {ex}")
+            log.exception("Saving description for module %r failed", self.module.title)
+            # Roll back, so the shown text matches what is on disk.
+            self.module.description = previous_desc
+            self._show_desc_text(previous_desc)
+            self.update()
+            self.show_error(f"Could not save description: {ex}")
+            return
         self._show_desc_text(new_desc)
         self.update()
 
@@ -797,7 +813,7 @@ class ModuleDetail(ft.Container):
                     ft.Container(
                         content=self._sel_badge(),
                         alignment=ft.Alignment.CENTER_LEFT,
-                        margin=ft.margin.only(left=12),
+                        margin=ft.Margin.only(left=12),
                     ),
                 ]
             )
@@ -910,4 +926,5 @@ class ModuleDetail(ft.Container):
             else:
                 subprocess.Popen(["xdg-open", filepath])
         except Exception as ex:
-            print(f"Could not open {filepath}: {ex}")
+            log.exception("Could not open file %s", filepath)
+            self.show_error(f"Could not open {Path(filepath).name}: {ex}")
