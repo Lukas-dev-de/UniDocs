@@ -1,8 +1,10 @@
 """
 updater.py
 ----------
-Update check + self-update for UniDocs (Windows installer, Linux install.sh
-and AppImage).
+Update check + self-update for UniDocs (Windows installer).
+
+Linux and macOS never install by themselves: the check only tells them a
+release exists, the update dialog opens the release page.
 
 Deliberately standard-library only (``urllib``) so it keeps working inside the
 frozen ``flet build`` bundle without adding another dependency.
@@ -29,7 +31,6 @@ import os
 import platform
 import re
 import subprocess
-import sys
 import tempfile
 import urllib.error
 import urllib.request
@@ -258,9 +259,8 @@ def download(
 def appimage_path() -> Path | None:
     """The ``.AppImage`` file this copy runs from, when there is one.
 
-    A running AppImage exports its own path in ``$APPIMAGE``. The app itself
-    lives read-only inside a temporary mount, so that env var is the only way
-    to reach the file that has to be replaced.
+    A running AppImage exports its own path in ``$APPIMAGE``. Only used to pick
+    the AppImage asset over the tarball - nothing is ever written to that file.
     """
     raw = os.environ.get("APPIMAGE")
     if not raw:
@@ -274,72 +274,33 @@ def is_appimage() -> bool:
     return appimage_path() is not None
 
 
-def bundle_dir() -> Path:
-    """The folder the frozen app lives in (``unidocs`` + ``data``/``lib``)."""
-    return Path(sys.executable).resolve().parent
-
-
-def _is_frozen_bundle() -> bool:
-    """True when this process runs from a ``flet build`` bundle.
-
-    Guards the Linux install route: under ``flet run`` ``sys.executable`` is a
-    plain interpreter and unpacking a release archive over it would be a nasty
-    surprise. The bundle is recognised by the launcher name and the ``data``
-    folder Flutter puts next to it.
-    """
-    exe = Path(sys.executable)
-    return (exe.name.lower().startswith("unidocs")
-            and (exe.resolve().parent / "data").is_dir())
-
-
 def platform_can_self_update(system: str | None = None) -> bool:
-    """Where a self-update is possible at all: Windows and Linux.
+    """Where a self-update is possible at all: Windows only.
 
     Windows has the Inno Setup installer (fixed AppId, replaces the running
-    install). Linux has the per-user install (``installer/install.sh``) and the
-    AppImage. macOS only ships a portable ``.app`` zip that cannot replace
-    itself.
+    install). Linux and macOS installs are updated by hand from the release
+    page, so nothing there can replace itself - no silent patch install, and the
+    settings switch stays off and greyed out.
     """
-    return (system or platform.system()).lower() in ("windows", "linux")
-
-
-def location_is_replaceable(system: str | None = None) -> bool:
-    """True when the *currently running* copy may overwrite itself.
-
-    Linux only, and only asked from there (see ``can_self_update``): an AppImage
-    can always be overwritten, a folder install only when it really is a bundle
-    the user may write to. Running from source (``flet run``) is never
-    replaceable.
-    """
-    if (system or platform.system()).lower() != "linux":
-        return False
-    appimage = appimage_path()
-    if appimage is not None:
-        return os.access(appimage, os.W_OK)
-    return _is_frozen_bundle() and os.access(bundle_dir(), os.W_OK)
+    return (system or platform.system()).lower() == "windows"
 
 
 def can_self_update(system: str | None = None) -> bool:
     """True when UniDocs can install its own update instead of just downloading.
 
     Windows: yes, the Inno Setup installer carries a fixed AppId and replaces
-    the running install in place, wherever it lives. Linux: only when this copy
-    can really be overwritten, see ``location_is_replaceable``. macOS: no.
+    the running install in place, wherever it lives. Linux and macOS: no, the
+    update dialog only opens the release page there.
     """
-    system = (system or platform.system()).lower()
-    if not platform_can_self_update(system):
-        return False
-    if system == "linux":
-        return location_is_replaceable(system)
-    return True
+    return platform_can_self_update(system)
 
 
 def can_install_asset(asset: tuple[str, str] | None, system: str | None = None) -> bool:
-    """True when this asset is something UniDocs can install by itself.
+    """True when this asset has an install form on this system.
 
     A setup ``.exe`` on Windows; a ``.tar.gz``/``.tgz`` archive or an
-    ``.AppImage`` on Linux. A Windows *zip* and anything macOS only get offered
-    as a download.
+    ``.AppImage`` on Linux. Saying nothing about whether *this* copy may install
+    it - that is ``can_install_update`` / ``can_self_update``.
     """
     if not asset:
         return False
@@ -359,17 +320,11 @@ def can_install_update(asset: tuple[str, str] | None, system: str | None = None)
     settings switch), this is the question the update dialog asks before it
     offers an "install" button instead of a browser download.
 
-    Windows: the setup always can. Linux: ``install.sh`` installs into
-    ``$HOME/.local/share/unidocs`` and works wherever the running copy lives, so
-    a tarball always counts (even from source); an ``.AppImage`` only counts
-    when that file may be overwritten. macOS: never.
+    Windows: the setup. Everything else: never - Linux and macOS only open the
+    release page, so there is no install button there.
     """
-    if not can_install_asset(asset, system):
-        return False
     system = (system or platform.system()).lower()
-    if system == "linux" and asset[0].lower().endswith(".appimage"):
-        return location_is_replaceable("linux")
-    return platform_can_self_update(system)
+    return platform_can_self_update(system) and can_install_asset(asset, system)
 
 
 # Where a downloaded update is parked before the installer picks it up.
@@ -379,45 +334,17 @@ UPDATE_TEMP_DIR = Path(tempfile.gettempdir()) / "unidocs-update"
 def download_and_launch(
     asset: tuple[str, str],
     progress: Callable[[int, int], None] | None = None,
-    *,
-    release: Release | None = None,
 ) -> Path:
-    """Download an update asset and hand it over to the platform's installer.
+    """Download the Windows setup and hand it over to the installer.
 
-    Windows runs the setup, Linux overwrites the running AppImage or installs
-    with the release's ``install.sh`` (``release`` is how that script is found).
     Returns once the detached helper is running - the caller is expected to
     quit the app right after, that is what the helper waits for.
     """
-    name, url = asset
-    system = platform.system().lower()
-    if system == "windows":
-        payload = download(url, UPDATE_TEMP_DIR, progress=progress)
-        launch_windows_installer(payload)
-        return payload
-    if system == "linux":
-        return _linux_download_and_launch(asset, progress, release)
-    raise UpdateError("UniDocs cannot install its own update on this platform.")
-
-
-def _linux_download_and_launch(
-    asset: tuple[str, str],
-    progress: Callable[[int, int], None] | None,
-    release: Release | None,
-) -> Path:
-    name, url = asset
+    if platform.system().lower() != "windows":
+        raise UpdateError("UniDocs only installs its own updates on Windows.")
+    _, url = asset
     payload = download(url, UPDATE_TEMP_DIR, progress=progress)
-    if name.lower().endswith(".appimage"):
-        launch_linux_appimage(payload)
-        return payload
-    # install.sh ships as its own release asset and does the folder install
-    # (launcher, desktop entry, icon). The archive is already here, so it just
-    # gets handed over - no second download, no curl/wget on the user's machine.
-    script_url = release.assets.get("install.sh") if release else None
-    if not script_url:
-        raise UpdateError("This release has no install.sh to install with.")
-    script = download(script_url, UPDATE_TEMP_DIR)
-    launch_linux_install_script(payload, script)
+    launch_windows_installer(payload)
     return payload
 
 
@@ -456,80 +383,3 @@ def launch_windows_installer(installer: Path | str, wait_for_pid: int | None = N
         close_fds=True,
         cwd=str(installer.parent),
     )
-
-
-#  Linux  
-
-# Both helpers wait for the app to quit and then bring it back up, so they are
-# written next to the other update temp files and started detached - they have
-# to survive the app closing.
-#
-# AppImage: overwrite the file the app was started from. ``$APPIMAGE`` points at
-# the real file, the running app is a copy in a read-only mount, so this is the
-# one thing that can be replaced.
-_LINUX_APPIMAGE_HELPER = r"""#!/usr/bin/env bash
-set -u
-pid="$1"; payload="$2"; target="$3"
-while kill -0 "$pid" 2>/dev/null; do sleep 1; done
-cp -f "$payload" "$target" && chmod +x "$target" || exit 1
-exec "$target"
-"""
-
-# Folder install / from source: let the release's own install.sh do the work
-# (bundle, launcher, desktop entry, icon). It is handed the already-downloaded
-# archive, so it needs neither curl/wget nor a writable copy of the running app.
-_LINUX_SCRIPT_HELPER = r"""#!/usr/bin/env bash
-set -u
-pid="$1"; archive="$2"; script="$3"
-while kill -0 "$pid" 2>/dev/null; do sleep 1; done
-bash "$script" "$archive" || exit 1
-bin="${XDG_BIN_HOME:-$HOME/.local/bin}/unidocs"
-[ -x "$bin" ] || bin="${UNIDOCS_DIR:-$HOME/.local/share/unidocs}/unidocs"
-exec "$bin"
-"""
-
-
-def _run_linux_helper(source: str, *args: str) -> None:
-    """Write ``source`` to ``unidocs-update.sh`` and start it detached.
-
-    The helper gets this process' pid as its first argument, then ``args``, and
-    survives the app closing (``start_new_session``).
-    """
-    helper = UPDATE_TEMP_DIR / "unidocs-update.sh"
-    helper.parent.mkdir(parents=True, exist_ok=True)
-    helper.write_text(source, encoding="utf-8", newline="\n")
-    helper.chmod(0o755)
-    subprocess.Popen(
-        ["bash", str(helper), str(os.getpid()), *args],
-        start_new_session=True,
-        close_fds=True,
-        cwd=str(helper.parent),
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
-
-
-def launch_linux_appimage(payload: Path | str) -> None:
-    """Install a downloaded AppImage over the one this copy runs from.
-
-    A bash helper waits for the process to exit, overwrites the file and starts
-    UniDocs again. It is detached, so it survives the app closing.
-    """
-    target = appimage_path()
-    if target is None:
-        raise UpdateError("This copy is not running from an AppImage.")
-    if not os.access(target, os.W_OK):
-        raise UpdateError(f"Cannot write to {target}.")
-    _run_linux_helper(_LINUX_APPIMAGE_HELPER, str(payload), str(target))
-
-
-def launch_linux_install_script(archive: Path | str, script: Path | str) -> None:
-    """Install a downloaded archive with the release's own ``install.sh``.
-
-    ``install.sh`` installs into ``$HOME/.local/share/unidocs`` (see
-    ``installer/install.sh``), so this works wherever the running copy lives -
-    a folder install, an AppImage folder or a ``flet run`` checkout. A detached
-    bash helper waits for the process to exit, runs the script and starts the
-    freshly installed UniDocs.
-    """
-    _run_linux_helper(_LINUX_SCRIPT_HELPER, str(archive), str(script))

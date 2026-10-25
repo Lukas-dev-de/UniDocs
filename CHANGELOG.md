@@ -1,5 +1,9 @@
 # CHANGELOG
 ## v2.5.1 - Unreleased
+- change:
+   - updater: Linux and macOS no longer download or install updates themselves. The update dialog only opens the release page there, so a click never starts a download behind your back. Windows still installs in place, and patch releases still go in on startup there
+   - updater: the update dialog button is called "Open release page" where nothing installs itself, and "Install now" on Windows, instead of one button that behaved differently
+   - settings: "Install patches automatically" is hidden on Linux and macOS instead of sitting there greyed out with a note under it
 - fix:
    - tags: tags with numbers in their name are sorted naturally now, so `w2` comes before `w10` in the tag filter bar and in the Manage Tags dialog, instead of `w1, w10, w11, w2`
 

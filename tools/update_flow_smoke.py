@@ -7,12 +7,11 @@ a silent install the user did not want. This script drives the real check with
 a fake page, so the decision table is verified without network or GUI.
 
     patch release + "install patches automatically" on an install that can
-    replace itself (Windows setup, Linux install.sh / AppImage)
+    replace itself (the Windows setup)
         -> silent install, no buttons
     anything else that is newer
-        -> one popup: Linux asks "Install automatically" (install.sh) or
-           "Manually" (opens the release page), the other systems get
-           "Install now"/"Download" + "Later"
+        -> one popup: the Windows setup offers "Install now", Linux and macOS
+           only "Open release page" (nothing is downloaded by the app there)
     nothing newer, or that version was shown already, or check failed
         -> nothing at all
 """
@@ -144,16 +143,21 @@ check("title says what is happening", prompt.title.controls[1].value if prompt e
 check("version remembered (no nagging next start)", cfg.seen_update, "2.3.1")
 check("dialog is on screen", prompt.open if prompt else None, True)
 
-print("silent patch install on Linux (install.sh build, switch on):")
-overlay, _cfg, _ = run_check("2.3.1", "2.3.0", asset=TAR, system="Linux")
+print("patch release on Linux (tarball), switch on -> still asks, no download:")
+overlay, _cfg, _ = run_check("2.3.1", "2.3.0", asset=TAR, system="Linux", self_update=False)
 prompt = overlay[0] if overlay else None
 check("one prompt", len(overlay), 1)
-check("install starts by itself", getattr(prompt, "_install_now", None), True)
+check("never installs by itself", getattr(prompt, "_install_now", None), False)
+check("no self-update", getattr(prompt, "_self_update", None), False)
+check("button opens the release page", prompt._install_button.url if prompt else None,
+      "https://example.invalid/release")
 
-print("silent patch install from an AppImage, switch on:")
-overlay, _cfg, _ = run_check("2.3.1", "2.3.0", asset=APPIMAGE, system="Linux")
+print("patch release from an AppImage -> same, the file is not touched:")
+overlay, _cfg, _ = run_check("2.3.1", "2.3.0", asset=APPIMAGE, system="Linux", self_update=False)
 prompt = overlay[0] if overlay else None
-check("install starts by itself", getattr(prompt, "_install_now", None), True)
+check("never installs by itself", getattr(prompt, "_install_now", None), False)
+check("button opens the release page", prompt._install_button.url if prompt else None,
+      "https://example.invalid/release")
 
 print("patch release, switch off -> asks instead:")
 overlay, cfg, _ = run_check("2.3.1", "2.3.0", patch_auto=False)
@@ -164,24 +168,17 @@ check("Later + Install now", [b.content for b in prompt.actions] if prompt else 
       ["Later", "Install now"])
 check("version remembered", cfg.seen_update, "2.3.1")
 
-print("patch release on Linux (install.sh build), switch off -> automatic + manual:")
-overlay, _cfg, _ = run_check("2.3.1", "2.3.0", asset=TAR, system="Linux", patch_auto=False)
-prompt = overlay[0] if overlay else None
-check("one prompt", len(overlay), 1)
-check("offers a self-update", getattr(prompt, "_self_update", None), True)
-check("label names the auto path", prompt._install_button.content if prompt else None,
-      "Install automatically")
-check("Later + Manually + install", [b.content for b in prompt.actions] if prompt else None,
-      ["Later", "Manually", "Install automatically"])
-check("manual opens the release page", prompt._manual_button.url if prompt else None,
-      "https://example.invalid/release")
-
-print("new minor on Linux -> same automatic/manual choice:")
-overlay, _cfg, _ = run_check("2.4.0", "2.3.0", asset=TAR, system="Linux")
+print("new minor on Linux -> release page only, no install button:")
+overlay, _cfg, _ = run_check("2.4.0", "2.3.0", asset=TAR, system="Linux", self_update=False)
 prompt = overlay[0] if overlay else None
 check("waits for the user", getattr(prompt, "_install_now", None), False)
-check("install button is the auto path", prompt._self_update if prompt else None, True)
-check("manual button present", prompt._manual_button in prompt.actions if prompt else None, True)
+check("offers no self-update", getattr(prompt, "_self_update", None), False)
+check("Later + release page", [b.content for b in prompt.actions] if prompt else None,
+      ["Later", "Open release page"])
+check("button opens the release page", prompt._install_button.url if prompt else None,
+      "https://example.invalid/release")
+check("no manual button next to it", hasattr(prompt, "_manual_button") if prompt else None,
+      False)
 
 print("patch release on an install that cannot replace itself -> asks instead:")
 overlay, _cfg, _ = run_check("2.3.1", "2.3.0", asset=TAR, system="Linux", self_update=False)
@@ -189,7 +186,7 @@ prompt = overlay[0] if overlay else None
 check("still one prompt", len(overlay), 1)
 check("offers a download, not an install", getattr(prompt, "_self_update", None), False)
 check("button hands over to the browser", prompt._install_button.url if prompt else None,
-      "https://example.invalid/tar")
+      "https://example.invalid/release")
 
 print("patch release with a macOS zip -> download only:")
 overlay, _cfg, _ = run_check(
@@ -199,8 +196,8 @@ overlay, _cfg, _ = run_check(
 )
 prompt = overlay[0] if overlay else None
 check("offers a download, not an install", getattr(prompt, "_self_update", None), False)
-check("button hands over to the browser", prompt._install_button.url if prompt else None,
-      "https://example.invalid/mac")
+check("button opens the release page", prompt._install_button.url if prompt else None,
+      "https://example.invalid/release")
 
 print("minor release (2.4.0), switch on -> never silent:")
 overlay, _cfg, _ = run_check("2.4.0", "2.3.0")
@@ -223,8 +220,8 @@ prompt = overlay[0] if overlay else None
 check("still tells the user", len(overlay), 1)
 check("bottom line says so", "no download for your system" in prompt.content.content.controls[1].value
       if prompt else None, True)
-check("close instead of install", [b.content for b in prompt.actions] if prompt else None,
-      ["Close"])
+check("still offers the release page", [b.content for b in prompt.actions] if prompt else None,
+      ["Later", "Open release page"])
 
 print("check failed (offline / rate limit):")
 overlay, cfg, _ = run_check("", "2.3.0", release_error="No connection to GitHub.")

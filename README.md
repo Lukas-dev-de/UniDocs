@@ -103,7 +103,7 @@ flet build linux -v
 For more details on building Linux package, refer to the [Linux Packaging Guide](https://flet.dev/docs/publish/linux/).
 
 The release workflow packs this into two shapes: a `.tar.gz` of the whole bundle (that is what
-`install.sh` and the in-app updater use) and an `AppImage`. `installer/build_appimage.sh` does
+`install.sh` unpacks) and an `AppImage`. `installer/build_appimage.sh` does
 the AppImage ([appimagetool](https://github.com/AppImage/appimagetool) plus the AppDir layout)
 and can be run locally:
 
@@ -191,12 +191,12 @@ It unpacks the release archive into `~/.local/share/unidocs`, links `~/.local/bi
 and drops an icon plus a menu entry. `./install.sh v2.4.0` installs a specific tag,
 `./install.sh --uninstall` removes it again (your documents are untouched).
 
-The alternative is the `AppImage`: download, `chmod +x`, run it. The in-app updater
-installs Linux updates for you: the `install.sh` build runs the release's own `install.sh`
-("Install automatically" in the update dialog, or "Manually" to open the release page), an
-AppImage is replaced in place. Because `install.sh` always installs into
-`~/.local/share/unidocs`, this also works when UniDocs runs from source (`flet run`); only
-macOS still just opens the download in the browser.
+The alternative is the `AppImage`: download, `chmod +x`, run it.
+
+Linux and macOS are updated by hand: the update dialog only opens the release page there,
+nothing is downloaded or installed by the app itself. Windows installs its own updates - the
+setup replaces the running install and starts UniDocs again, and patch releases can do that on
+startup without asking (switch in the settings).
 
 If the AppImage does not start, it is almost always the missing `libfuse.so.2`: Ubuntu 22.04
 and newer ship FUSE 3 only, so install `libfuse2` (`sudo apt install libfuse2`) or start it

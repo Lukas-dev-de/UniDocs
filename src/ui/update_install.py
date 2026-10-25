@@ -12,7 +12,7 @@ Usage
 -----
     installer = UpdateInstaller(status_text, on_busy=self._set_busy,
                                 on_failed=self._install_failed)
-    installer.start(asset, release)        # asset = (name, url)
+    installer.start(asset)        # asset = (name, url)
 """
 
 from __future__ import annotations
@@ -46,7 +46,7 @@ class UpdateInstaller:
 
     #  public 
 
-    def start(self, asset: tuple[str, str], release: updater.Release | None = None) -> None:
+    def start(self, asset: tuple[str, str]) -> None:
         page = self._status.page
         if page is None or not asset:
             return
@@ -55,19 +55,16 @@ class UpdateInstaller:
         if self._on_busy:
             self._on_busy(True)
         page.update()
-        page.run_thread(self._download_worker, asset, release)
+        page.run_thread(self._download_worker, asset)
 
     #  worker (background thread) 
 
-    def _download_worker(
-        self, asset: tuple[str, str], release: updater.Release | None
-    ) -> None:
+    def _download_worker(self, asset: tuple[str, str]) -> None:
         page = self._status.page
         if page is None:  # window went away while we were busy
             return
         try:
-            # Linux needs the release's install.sh asset, hence ``release``.
-            updater.download_and_launch(asset, progress=self._report_progress, release=release)
+            updater.download_and_launch(asset, progress=self._report_progress)
         except (updater.UpdateError, OSError) as ex:
             page.run_task(self._failed, str(ex))
             return

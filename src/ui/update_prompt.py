@@ -5,13 +5,16 @@ The update dialog at startup.
 
 ``StartupUpdateCheck`` asks GitHub once per app start, in the background:
 
-    patch release (2.3.0 -> 2.3.1) and "install patches automatically" is on
-        -> install it silently, no question asked (installed builds: Windows
-           setup, Linux install.sh / AppImage)
+    patch release (2.3.0 -> 2.3.1) and "install patches automatically" is on,
+    on an install that can replace itself (Windows setup)
+        -> install it silently, no question asked
     anything else
         -> one popup, and only one: the version is remembered in config.json
            (``seen_update``), so a dismissed update never shows up again on the
            next launch. Installing it later is still possible from the settings.
+
+On Linux and macOS nothing is installed by the app itself: the button opens the
+release page and the user picks the download there.
 
 Usage (main.py)
 ---------------
@@ -39,9 +42,8 @@ def current_version() -> str:
         UNIDOCS_FAKE_VERSION=2.3.0-rc1 .venv/bin/flet run  # 2.3.0 looks like a patch
 
     In VS Code the "Python: Unidocs (update popup)" launch config does the
-    Same. The install button only appears where UniDocs can install by itself
-    (Windows setup, Linux via ``install.sh`` or a writable AppImage); on macOS
-    and for a plain zip the same button just opens the download in the browser.
+    Same. Only the Windows setup installs itself in place; on Linux, macOS and
+    for a plain zip the same button just opens the release page in the browser.
     """
     return os.environ.get("UNIDOCS_FAKE_VERSION", "").strip() or CURRENT_VERSION
 
@@ -67,10 +69,8 @@ class UpdatePrompt(ft.AlertDialog):
         super().__init__()
         current = current or current_version()
         self._asset = asset
-        self._release = release
         self._install_now = install_now
         self._self_update = updater.can_install_update(asset)
-        self._linux = updater.platform.system().lower() == "linux"
 
         self._status = ft.Text("", size=12, color=ft.Colors.ON_SURFACE_VARIANT)
         self._ring = ft.ProgressRing(
@@ -82,17 +82,18 @@ class UpdatePrompt(ft.AlertDialog):
             on_failed=self._on_failed,
         )
 
+        # Two shapes: an install button (Windows setup, needs an asset) or a
+        # plain link to the release page - Linux, macOS and a Windows zip have
+        # to be sorted out by hand there, so nothing is downloaded behind the
+        # user's back.
         self._install_button = ft.FilledButton(
             self._install_label(),
-            icon=ft.Icons.DOWNLOAD,
-            disabled=not asset,
+            icon=ft.Icons.DOWNLOAD if self._self_update else ft.Icons.OPEN_IN_NEW,
+            disabled=self._self_update and not asset,
             on_click=self._install if self._self_update else None,
-            url=self._asset[1] if asset and not self._self_update else None,
+            url=None if self._self_update else release.page_url,
         )
         self._later_button = ft.TextButton("Later", on_click=self._later)
-        self._manual_button = ft.TextButton(
-            "Manually", icon=ft.Icons.OPEN_IN_NEW, url=release.page_url
-        )
         self._notes_button = ft.TextButton(
             "Release notes", icon=ft.Icons.DESCRIPTION, url=release.page_url
         )
@@ -133,8 +134,9 @@ class UpdatePrompt(ft.AlertDialog):
                     ft.Text(
                         "UniDocs closes, installs the update and starts itself again."
                         if self._self_update
-                        else "The download opens in your browser: unpack it over your "
-                        "UniDocs folder, or replace your .AppImage with it.",
+                        else "The release page opens in your browser - download the "
+                        "build for your system there and unpack it over your "
+                        "UniDocs folder.",
                         size=12,
                         color=ft.Colors.ON_SURFACE_VARIANT,
                     )
@@ -163,25 +165,17 @@ class UpdatePrompt(ft.AlertDialog):
 
     def did_mount(self):
         if self._install_now and self._asset:
-            self._installer.start(self._asset, self._release)
+            self._installer.start(self._asset)
 
     #  actions 
 
     def _install_label(self) -> str:
-        if not self._self_update:
-            return "Download"
-        return "Install automatically" if self._linux else "Install now"
+        return "Install now" if self._self_update else "Open release page"
 
     def _action_buttons(self) -> list[ft.Control]:
-        if not self._asset:
-            return [ft.TextButton("Close", on_click=self._later)]
-        buttons: list[ft.Control] = [self._later_button]
-        # Linux gets a real choice: let install.sh do it, or open the release and
-        # pick a download by hand.
-        if self._self_update and self._linux:
-            buttons.append(self._manual_button)
-        buttons.append(self._install_button)
-        return buttons
+        # Always the same two buttons: a Windows setup without an asset only
+        # greys the install button out (see __init__).
+        return [self._later_button, self._install_button]
 
     def _later(self, e):
         self.open = False
@@ -189,7 +183,7 @@ class UpdatePrompt(ft.AlertDialog):
 
     def _install(self, e):
         if self._asset:
-            self._installer.start(self._asset, self._release)
+            self._installer.start(self._asset)
 
     def _set_busy(self, busy: bool) -> None:
         self._ring.visible = busy

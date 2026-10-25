@@ -17,6 +17,7 @@ COLUMN_MIN_WIDTH = 374      # width the mode selector needs next to its icon
 CONTENT_MAX_WIDTH = 780     # widest the dialog ever gets
 STACK_BREAKPOINT = 2 * COLUMN_MIN_WIDTH + 32   # = full dialog width
 COMPACT_BREAKPOINT = 400    # below this: mode selector drops its text labels
+
 CONTENT_MIN_WIDTH = 300
 CONTENT_SIDE_MARGIN = 72    # dialog padding + a little breathing room
 
@@ -74,7 +75,6 @@ class SettingsDialog(ft.AlertDialog):
         #  update check 
         # The whole update state lives in these few controls: the check runs in
         # a background thread and only ever writes into them.
-        self._update_release: updater.Release | None = None
         self._update_asset: tuple[str, str] | None = None
 
         self._check_button = ft.FilledButton(
@@ -89,9 +89,8 @@ class SettingsDialog(ft.AlertDialog):
             "", size=12, color=ft.Colors.ON_SURFACE_VARIANT
         )
 
-        # Only one of the two download buttons is ever visible: where UniDocs can
-        # replace itself (Windows installer, Linux install.sh / AppImage) the
-        # button installs in place, everywhere else the browser gets the archive.
+        # Only one of the two download buttons is ever visible: on Windows the
+        # button installs in place, everywhere else it opens the release page.
         self._install_button = ft.FilledButton(
             "Download and install",
             icon=ft.Icons.DOWNLOAD,
@@ -99,8 +98,8 @@ class SettingsDialog(ft.AlertDialog):
             on_click=self._download_and_install,
         )
         self._download_button = ft.FilledButton(
-            "Download",
-            icon=ft.Icons.DOWNLOAD,
+            "Open release page",
+            icon=ft.Icons.OPEN_IN_NEW,
             visible=False,
             url=RELEASES_URL,
         )
@@ -129,24 +128,23 @@ class SettingsDialog(ft.AlertDialog):
         )
 
         # Patch releases (2.3.0 -> 2.3.1) are installed on startup without
-        # asking. Only an install that can replace itself may do that: on
-        # macOS, and on Linux when running from source or a read-only folder,
-        # the switch sits at "off" and greyed out instead of promising
-        # something that will not happen.
+        # asking. Only an install that can replace itself may do that - the
+        # Windows setup. Linux and macOS have no silent install at all, so the
+        # switch and its note are hidden there instead of sitting greyed out
+        # with an explanation.
         self._can_self_update = updater.can_self_update()
         self._auto_patch_switch = ft.Switch(
             label="Install patches automatically",
             value=self._cfg.auto_install_patches and self._can_self_update,
             on_change=self._on_auto_patch_change,
             disabled=not self._can_self_update,
+            visible=self._can_self_update,
         )
         self._auto_patch_note = ft.Text(
-            "Patch releases such as 2.3.0 → 2.3.1 are installed quietly on startup."
-            if self._can_self_update
-            else "Only available in the installed builds (Windows setup, Linux "
-            "install.sh / AppImage).",
+            "Patch releases such as 2.3.0 → 2.3.1 are installed quietly on startup.",
             size=12,
             color=ft.Colors.ON_SURFACE_VARIANT,
+            visible=self._can_self_update,
         )
 
         #  appearance controls 
@@ -558,7 +556,6 @@ class SettingsDialog(ft.AlertDialog):
 
     def _reset_update_section(self) -> None:
         """Back to the idle state (also called on every ``show()``)."""
-        self._update_release = None
         self._update_asset = None
         self._set_update_busy(False)
         self._update_status.value = ""
@@ -625,7 +622,6 @@ class SettingsDialog(ft.AlertDialog):
             self.update()
             return
 
-        self._update_release = release
         self._update_asset = updater.asset_for(release)
 
         note = "" if self._update_asset else " (no download for this system)"
@@ -638,7 +634,10 @@ class SettingsDialog(ft.AlertDialog):
         if updater.can_install_update(self._update_asset):
             self._install_button.visible = True
         elif self._update_asset:
-            self._download_button.url = self._update_asset[1]
+            # Nothing installs itself here (Linux, macOS, a Windows zip), so the
+            # button only hands over to the release page - no download behind
+            # the user's back.
+            self._download_button.url = release.page_url
             self._download_button.visible = True
 
         self._update_actions.visible = True
@@ -649,7 +648,7 @@ class SettingsDialog(ft.AlertDialog):
     def _download_and_install(self, e):
         """Fetch the update and let it replace this install (then restart)."""
         if self._update_asset:
-            self._installer.start(self._update_asset, self._update_release)
+            self._installer.start(self._update_asset)
 
     #  called by the shared installer 
 

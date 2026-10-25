@@ -111,14 +111,12 @@ check("no AppImage in release", updater.asset_for(zip_only, "Linux", appimage=Tr
 
 print("self-update platform gate:")
 check("windows capable", updater.platform_can_self_update("Windows"), True)
-check("linux capable", updater.platform_can_self_update("Linux"), True)
+check("linux not capable", updater.platform_can_self_update("Linux"), False)
 check("macos not capable", updater.platform_can_self_update("Darwin"), False)
 
 print("this copy can replace itself:")
-# Windows is always replaceable: the setup carries a fixed AppId. On Linux the
-# check looks at *this* copy, and this script runs from source (``flet run``),
-# where sys.executable is a plain interpreter - never a bundle, never an
-# AppImage.
+# Only the Windows setup replaces itself. Linux and macOS are updated by hand
+# from the release page, so the answer is no there - whatever this copy is.
 check("windows setup build", updater.can_self_update("Windows"), True)
 check("running from source", updater.can_self_update("Linux"), False)
 check("not an AppImage", updater.is_appimage(), False)
@@ -142,18 +140,12 @@ check("macos", updater.can_install_asset(LINUX_TAR, "Darwin"), False)
 check("no asset", updater.can_install_asset(None, "Windows"), False)
 
 print("can UniDocs install this update itself (not just download it):")
-# Same as can_install_asset, except Linux tarballs count even from source:
-# install.sh installs into ~/.local/share/unidocs wherever the running copy
-# lives. An AppImage still needs its own file to be writable.
+# Only the Windows setup: Linux and macOS only ever get the release page.
 check("windows setup", updater.can_install_update(SETUP_EXE, "Windows"), True)
 check("windows zip", updater.can_install_update(WINDOWS_ZIP, "Windows"), False)
-check("linux tarball from source", updater.can_install_update(LINUX_TAR, "Linux"), True)
-check("linux tgz from source", updater.can_install_update(LINUX_TGZ, "Linux"), True)
-check(
-    "linux AppImage without a writable AppImage",
-    updater.can_install_update(LINUX_APPIMAGE, "Linux"),
-    False,
-)
+check("linux tarball", updater.can_install_update(LINUX_TAR, "Linux"), False)
+check("linux tgz", updater.can_install_update(LINUX_TGZ, "Linux"), False)
+check("linux AppImage", updater.can_install_update(LINUX_APPIMAGE, "Linux"), False)
 check("linux old zip", updater.can_install_update(LINUX_ZIP, "Linux"), False)
 check("macos", updater.can_install_update(LINUX_TAR, "Darwin"), False)
 check("no asset", updater.can_install_update(None, "Windows"), False)

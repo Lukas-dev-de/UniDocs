@@ -15,9 +15,8 @@
 #   ./install.sh ./UniDocs-linux-x86_64.tar.gz  install from a local file
 #   ./install.sh --uninstall                    remove the install (documents stay)
 #
-# Running it again is how you update by hand. The app also updates itself:
-# "Install automatically" in the update dialog runs this script, and patch
-# releases install on startup.
+# Running it again is how you update by hand - the app itself only opens the
+# release page on Linux, it never installs anything there.
 #
 # Requires GTK3, which every normal desktop already has. It is deliberately not
 # bundled, see the README.
