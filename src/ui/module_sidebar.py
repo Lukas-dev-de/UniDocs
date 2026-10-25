@@ -3,6 +3,7 @@ from ui.components.module_tile import ModuleTile
 from ui.components.module_create_dialog import ModuleCreateDialog
 from ui.components.module_edit_dialog import ModuleEditDialog
 from ui.components.group_dialog import GroupDialog
+from ui.components.search_dialog import SearchDialog
 from ui.settings_dialog import SettingsDialog
 from ui.context_menu import ContextMenu
 from models.module import Module
@@ -91,6 +92,11 @@ class ModuleSidebar(ft.Container):
                 ),
                 self._group_select,
                 self._separator,
+                ft.IconButton(
+                    icon=ft.Icons.SEARCH,
+                    tooltip="Search modules and documents",
+                    on_click=self._open_search,
+                ),
                 self._home_button,
                 self.modules_list,
                 ft.IconButton(
@@ -124,6 +130,9 @@ class ModuleSidebar(ft.Container):
             store=self._store,
             on_moved=self._on_module_moved,
         )
+        # Searches every group, so it gets the store instead of the visible
+        # list and re-reads all modules each time it opens.
+        self._search_dialog = SearchDialog(on_open_module=self._on_search_module)
 
         # New group prompt (opened from the group selector's "New group…").
         self._new_group_field = ft.TextField(
@@ -183,6 +192,7 @@ class ModuleSidebar(ft.Container):
             self._edit_dialog,
             self._group_dialog,
             self._new_group_dialog,
+            self._search_dialog,
         ):
             self.page.overlay.append(item)
         self.page.update()
@@ -199,6 +209,7 @@ class ModuleSidebar(ft.Container):
             self._edit_dialog,
             self._group_dialog,
             self._new_group_dialog,
+            self._search_dialog,
         ):
             if hasattr(self, "_settings_dialog") and item in page.overlay:
                 page.overlay.remove(item)
@@ -207,6 +218,26 @@ class ModuleSidebar(ft.Container):
 
     def _open_settings(self, e):
         self._settings_dialog.show()
+
+    #  search 
+
+    def _open_search(self, e=None):
+        """Search every module of every group, not just the visible one."""
+        self._search_dialog.show(self._store.load_all())
+
+    def _on_search_module(self, module: Module):
+        """Open a module picked from the search dialog.
+
+        The hit may live in another group than the one the sidebar currently
+        shows, so the active group moves along: otherwise the sidebar would
+        keep listing the old group and the "recent modules" widget would file
+        the module under the wrong one.
+        """
+        if module.group != self._active_group:
+            self._active_group = module.group
+            self._cfg.last_group = module.group
+            self._reload_and_update()
+        self._on_tile_select(module)
 
     def _on_location_change(self, new_path):
         self._store.stop_watching()
