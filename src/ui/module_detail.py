@@ -1,6 +1,7 @@
 import flet as ft
 from models.module import Module
 from models.document import Document
+from models.tag import natural_sort_key
 from app_storage.module_store import ModuleStore
 from ui.import_dialog import ImportDialog
 from ui.context_menu import ContextMenu
@@ -439,7 +440,7 @@ class ModuleDetail(ft.Container):
             self._tag_filter_row.controls.append(
                 self._filter_chip("All", None, all_selected)
             )
-            for tag in sorted(all_tags, key=lambda t: t["name"]):
+            for tag in sorted(all_tags, key=lambda t: natural_sort_key(t["name"])):
                 selected = self._active_tag_filter == tag["id"]
                 self._tag_filter_row.controls.append(
                     self._filter_chip(tag["name"], tag["id"], selected, tag["color"])

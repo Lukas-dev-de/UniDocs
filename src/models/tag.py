@@ -5,9 +5,24 @@ A Tag has a stable UUID (id), a display name, and a color hex.
 Storing the id in .doc_tags means rename/recolor never orphans assignments.
 """
 from __future__ import annotations
+import re
 import uuid
 
 DEFAULT_TAG_COLOR = "#1565C0"
+
+_DIGITS = re.compile(r"(\d+)")
+
+
+def natural_sort_key(name: str) -> list:
+    """Sort key that orders w2 before w10 (digit runs compared as numbers).
+
+    The pattern always splits into text, number, text, number..., so element
+    types line up across keys and lists stay comparable.
+    """
+    return [
+        int(part) if part.isdigit() else part.lower()
+        for part in _DIGITS.split(name or "")
+    ]
 
 
 class Tag:

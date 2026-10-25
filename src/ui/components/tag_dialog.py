@@ -11,7 +11,7 @@ import flet as ft
 
 from models.document import Document
 from models.module import Module
-from models.tag import DEFAULT_TAG_COLOR
+from models.tag import DEFAULT_TAG_COLOR, natural_sort_key
 from app_storage.module_store import ModuleStore
 from ui.components.tag_colors import TAG_PALETTE
 from ui.theme import on_color
@@ -194,7 +194,7 @@ class TagDialog(ft.AlertDialog):
                         color=ft.Colors.OUTLINE, italic=True)
             )
         else:
-            for tag in sorted(all_tags, key=lambda t: t["name"]):
+            for tag in sorted(all_tags, key=lambda t: natural_sort_key(t["name"])):
                 state = self._desired.get(tag["id"], False)
                 self._chips_row.controls.append(
                     self._build_chip(tag["id"], tag["name"], tag["color"], state)
