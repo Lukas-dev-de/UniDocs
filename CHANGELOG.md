@@ -1,11 +1,17 @@
 # CHANGELOG
 ## v2.5.1 - Unreleased
+- new:
+   - sidebar: a search button above the home button opens a dialog that searches every module of every group - by module title, module description and document name. A document hit opens its module without starting the file
 - change:
    - updater: Linux and macOS no longer download or install updates themselves. The update dialog only opens the release page there, so a click never starts a download behind your back. Windows still installs in place, and patch releases still go in on startup there
    - updater: the update dialog button is called "Open release page" where nothing installs itself, and "Install now" on Windows, instead of one button that behaved differently
    - settings: "Install patches automatically" is hidden on Linux and macOS instead of sitting there greyed out with a note under it
+   - modules: the sidebar order now belongs to the module itself instead of its folder name, so a renamed folder can no longer pull a module out of its place
+   - saving: `.meta`, `.order`, `tags.json`, `.doc_tags` and the home page files are written atomically, so an interrupted save cannot leave a half-written file behind
 - fix:
    - tags: tags with numbers in their name are sorted naturally now, so `w2` comes before `w10` in the tag filter bar and in the Manage Tags dialog, instead of `w1, w10, w11, w2`
+   - modules: renaming a module folder outside the app keeps the module in its place in the sidebar instead of dropping it to the bottom
+   - errors: a failing rename, description save, file open or module delete now shows a message and writes the traceback to a log file instead of failing silently. Linux: `~/.local/state/UniDocs/log/UniDocs.log`, macOS: `~/Library/Logs/UniDocs/`, Windows: `%LOCALAPPDATA%\UniDocs\Logs\`
 
 ## v2.5.0
 - new:
