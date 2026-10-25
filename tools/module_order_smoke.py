@@ -73,17 +73,35 @@ def displayed(store: ModuleStore) -> list[str]:
     return [m.title for m in store.load_all()]
 
 
+def ids(store: ModuleStore, titles: list[str]) -> list[str]:
+    """Module ids for *titles* - `.order` stores ids, not folder names."""
+    by_title = {m.title: m.id for m in store.load_all()}
+    return [by_title[title] for title in titles]
+
+
+def order_titles(store: ModuleStore, group: str | None = None) -> list[str]:
+    """The saved order translated back to titles, for readable assertions."""
+    by_id = {m.id: m.title for m in store.load_all()}
+    return [by_id.get(module_id, "?") for module_id in store.load_order(group)]
+
+
+def order_payload(store: ModuleStore) -> dict:
+    return json.loads((store.root / ORDER_FILENAME).read_text())
+
+
 def test_order_roundtrip() -> None:
     store = fresh_store()
     assert store.load_order() == [], "a new install has no saved order"
     assert not (store.root / ORDER_FILENAME).exists(), "nothing written until moved"
 
-    store.save_order(["Chemistry", "Math", "Physics"])
-    assert json.loads((store.root / ORDER_FILENAME).read_text())[0] == "Chemistry"
+    store.save_order(ids(store, ["Chemistry", "Math", "Physics"]))
+    payload = order_payload(store)
+    assert payload["version"] == 2, payload
+    assert payload["ids"][0] == ids(store, ["Chemistry"])[0], payload
     assert displayed(store) == ["Chemistry", "Math", "Physics"], displayed(store)
 
-    # A name that no longer exists must not hide the modules that do.
-    store.save_order(["Ghost", "Physics"])
+    # A stale id must not hide the modules that do exist.
+    store.save_order(["00000000-0000-0000-0000-000000000000"] + ids(store, ["Physics"]))
     assert displayed(store) == ["Physics", "Chemistry", "Math"], displayed(store)
     print("  order round-trip: ok")
 
@@ -95,17 +113,43 @@ def test_corrupt_order() -> None:
     assert displayed(store) == ["Chemistry", "Math", "Physics"], "falls back to A-Z"
 
     (store.root / ORDER_FILENAME).write_text('{"a": 1}')
-    assert store.load_order() == [], "a non-list is ignored too"
+    assert store.load_order() == [], "a dict without ids is ignored too"
     print("  corrupt order: ok")
+
+
+def test_legacy_order_is_migrated() -> None:
+    """A pre-2.5.1 `.order` (folder names) becomes ids on the next load."""
+    store = fresh_store()
+    (store.root / ORDER_FILENAME).write_text(
+        json.dumps(["Physics", "Math", "Chemistry"])
+    )
+
+    assert displayed(store) == ["Physics", "Math", "Chemistry"], displayed(store)
+    payload = order_payload(store)
+    assert payload["version"] == 2, payload
+    assert payload["ids"] == ids(store, ["Physics", "Math", "Chemistry"]), payload
+    print("  legacy order migrated: ok")
+
+
+def test_external_rename_keeps_slot() -> None:
+    """Renaming the folder from the outside no longer loses the slot."""
+    store = fresh_store()
+    store.save_order(ids(store, ["Chemistry", "Math", "Physics"]))
+
+    folder = store.root / "Chemistry"
+    folder.rename(store.root / "Chem 2")
+    assert displayed(store) == ["Chem 2", "Math", "Physics"], displayed(store)
+    assert order_titles(store) == ["Chem 2", "Math", "Physics"], order_titles(store)
+    print("  external rename keeps its slot: ok")
 
 
 def test_rename_follows_order() -> None:
     store = fresh_store()
-    store.save_order(["Chemistry", "Math", "Physics"])
+    store.save_order(ids(store, ["Chemistry", "Math", "Physics"]))
 
     chemistry = next(m for m in store.load_all() if m.title == "Chemistry")
     store.rename_module(chemistry, "Chem 2")
-    assert store.load_order() == ["Chem 2", "Math", "Physics"], store.load_order()
+    assert order_titles(store) == ["Chem 2", "Math", "Physics"], order_titles(store)
     assert displayed(store) == ["Chem 2", "Math", "Physics"], displayed(store)
     print("  rename keeps its slot: ok")
 
@@ -117,12 +161,12 @@ def test_move_down_and_up() -> None:
 
     sidebar._move_module(sidebar._tile_module(sidebar.modules_list.controls[0]), +1)
     assert titles(sidebar) == ["Math", "Chemistry", "Physics"], titles(sidebar)
-    assert store.load_order() == ["Math", "Chemistry", "Physics"], store.load_order()
+    assert order_titles(store) == ["Math", "Chemistry", "Physics"], order_titles(store)
     assert displayed(store) == ["Math", "Chemistry", "Physics"], displayed(store)
 
     sidebar._move_module(sidebar._tile_module(sidebar.modules_list.controls[2]), -1)
     assert titles(sidebar) == ["Math", "Physics", "Chemistry"], titles(sidebar)
-    assert store.load_order() == ["Math", "Physics", "Chemistry"], store.load_order()
+    assert order_titles(store) == ["Math", "Physics", "Chemistry"], order_titles(store)
 
     # A reload keeps the arrangement instead of reverting to alphabetical.
     sidebar._reload_and_update()
@@ -179,7 +223,7 @@ def test_add_module_goes_last() -> None:
 
     sidebar._on_create_module("Biology", "", ft.Icons.FOLDER, None, None)
     assert titles(sidebar) == ["Math", "Physics", "Chemistry", "Biology"], titles(sidebar)
-    assert store.load_order() == ["Math", "Physics", "Chemistry", "Biology"]
+    assert order_titles(store) == ["Math", "Physics", "Chemistry", "Biology"]
     assert displayed(store) == ["Math", "Physics", "Chemistry", "Biology"], displayed(store)
     print("  new modules land at the end: ok")
 
@@ -190,12 +234,12 @@ def test_order_survives_sanitised_titles() -> None:
     sidebar = make_sidebar(store)
 
     sidebar._on_create_module("Physics: Intro", "", ft.Icons.FOLDER, None, None)
-    assert store.load_order() == [
+    assert order_titles(store) == [
         "Chemistry",
         "Math",
         "Physics",
         "Physics Intro",
-    ], store.load_order()
+    ], order_titles(store)
 
     # The tile is relabelled from the folder name on reload, and the module
     # keeps its slot rather than dropping to the tail.
@@ -211,6 +255,8 @@ def test_order_survives_sanitised_titles() -> None:
 def main() -> None:
     test_order_roundtrip()
     test_corrupt_order()
+    test_legacy_order_is_migrated()
+    test_external_rename_keeps_slot()
     test_rename_follows_order()
     test_move_down_and_up()
     test_move_edges()

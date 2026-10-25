@@ -349,7 +349,7 @@ class ModuleSidebar(ft.Container):
     def _persist_order(self):
         self._store.save_order(
             [
-                module.title
+                module.id
                 for module in (
                     self._tile_module(c) for c in self.modules_list.controls
                 )

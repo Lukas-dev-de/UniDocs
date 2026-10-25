@@ -52,6 +52,9 @@ META_FILENAME = ".meta"
 DOC_TAGS_FILENAME = ".doc_tags"
 GLOBAL_TAGS_FILENAME = "tags.json"
 ORDER_FILENAME = ".order"
+# Version of the `.order` payload. 1 (implicit, a bare list) stored folder
+# names, 2 stores module ids - see ModuleStore._migrate_order.
+ORDER_VERSION = 2
 GROUP_MARKER_FILENAME = ".group"
 # Home page config per group (see app_storage.home_store.HomeStore). The store
 # only ever needs to know the name so the watcher can ignore it.
@@ -167,10 +170,14 @@ class ModuleStore:
                 if module:
                     found.append((folder.name, module))
 
+        # Rewrite a pre-2.5.1 order file before reading it: the mapping needs
+        # the loaded modules (and their ids) anyway.
+        self._migrate_order(group, [module for _, module in found])
+
         order = self.load_order(group)
         if order:
-            rank = {name: i for i, name in enumerate(order)}
-            found.sort(key=lambda item: rank.get(item[0], len(rank)))
+            rank = {module_id: i for i, module_id in enumerate(order)}
+            found.sort(key=lambda item: rank.get(item[1].id, len(rank)))
         return [module for _, module in found]
 
     def load_all(self) -> list[Module]:
@@ -209,19 +216,8 @@ class ModuleStore:
         if old_folder.exists() and old_folder != new_folder:
             old_folder.rename(new_folder)
         module.title = new_title
-
-        # A saved order is keyed by folder name, so follow the rename instead
-        # of letting the module drop to the alphabetical tail.
-        if old_folder.name != new_folder.name:
-            order = self.load_order(module.group)
-            if order:
-                self.save_order(
-                    [
-                        new_folder.name if name == old_folder.name else name
-                        for name in order
-                    ],
-                    module.group,
-                )
+        # No order fix-up needed: `.order` is keyed by the module id, which a
+        # rename keeps (see load_order).
 
     def rename_conflict(self, module: Module, new_title: str) -> bool:
         """True if renaming *module* to *new_title* would hit another module.
@@ -244,38 +240,79 @@ class ModuleStore:
     # -- sidebar order --------------------------------------------------------
 
     def load_order(self, group: str | None = None) -> list[str]:
-        """Folder names in the order the user arranged them in.
+        """Module ids in the order the user arranged them in.
 
         *group* selects which list: the Home order (root ``.order``) or the
         order of the modules inside that group (``<group>/.order``). Returns an
         empty list when the order was never changed, which tells
         :meth:`load_modules` to fall back to alphabetical sorting.
-        """
-        path = self._group_dir(group) / ORDER_FILENAME
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-        except (FileNotFoundError, json.JSONDecodeError, OSError):
-            return []
-        if not isinstance(data, list):
-            return []
-        return [str(name) for name in data]
 
-    def save_order(self, titles: list[str], group: str | None = None) -> None:
+        The file stores ids, not titles, so a module keeps its slot when its
+        folder is renamed from the outside. An order written before 2.5.1 (a
+        bare list of folder names) is mapped on the fly; ``load_modules`` then
+        rewrites it as ids.
+        """
+        raw = self._read_order(group)
+        if isinstance(raw, dict):
+            ids = raw.get("ids")
+            if not isinstance(ids, list):
+                return []
+            return [str(module_id) for module_id in ids]
+        if isinstance(raw, list):
+            mapped = (self._id_for_folder_name(str(name), group) for name in raw)
+            return [module_id for module_id in mapped if module_id]
+        return []
+
+    def save_order(self, module_ids: list[str], group: str | None = None) -> None:
         """Persist the module order shown in the sidebar.
 
         *group* selects which list: the Home order (root ``.order``) or the
         order of the modules inside that group (``<group>/.order``).
 
-        Takes module *titles* and stores the folder name each one maps to, so
-        the file stays comparable with :meth:`load_modules` even for titles
-        that ``_safe_name`` has to sanitise ("Physics: Intro" lives in
-        "Physics Intro"). Names that no longer exist are harmless: they simply
-        never match a folder and are dropped the next time the order is
+        Takes module *ids*. Ids that no longer exist are harmless: they simply
+        never match a module and are dropped the next time the order is
         written.
         """
         base = self._group_dir(group)
         write_json(
-            base / ORDER_FILENAME, [_safe_name(title) for title in titles]
+            base / ORDER_FILENAME,
+            {
+                "version": ORDER_VERSION,
+                "ids": [str(module_id) for module_id in module_ids],
+            },
+        )
+
+    def _read_order(self, group: str | None):
+        """Raw ``.order`` payload: a list (pre-2.5.1), a dict, or ``None``."""
+        path = self._group_dir(group) / ORDER_FILENAME
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except (FileNotFoundError, json.JSONDecodeError, OSError):
+            return None
+
+    def _id_for_folder_name(self, name: str, group: str | None) -> str | None:
+        """Module id of the module folder *name*, or ``None`` if there is none."""
+        meta_path = self._group_dir(group) / name / META_FILENAME
+        try:
+            meta = json.loads(meta_path.read_text(encoding="utf-8"))
+        except (FileNotFoundError, json.JSONDecodeError, OSError):
+            return None
+        module_id = meta.get("id")
+        return str(module_id) if module_id else None
+
+    def _migrate_order(self, group: str | None, modules: list[Module]) -> None:
+        """Rewrite a pre-2.5.1 order file (folder names) as module ids.
+
+        Runs from :meth:`load_modules`, because mapping a folder name to an id
+        needs the modules - and by then every legacy module has its id written
+        back into ``.meta``. A dict payload is already version 2 and left alone.
+        """
+        raw = self._read_order(group)
+        if not isinstance(raw, list) or not raw:
+            return
+        by_folder = {_safe_name(module.title): module.id for module in modules}
+        self.save_order(
+            [by_folder[name] for name in raw if name in by_folder], group
         )
 
     # -- groups ---------------------------------------------------------------
@@ -331,12 +368,15 @@ class ModuleStore:
 
         # Carry the module's slot over: drop it from the old order, append it
         # to the new one (the target order is only rewritten when it exists).
+        module_id = module.id
         old_order = self.load_order(module.group)
         if old_order:
-            self.save_order([n for n in old_order if n != src.name], module.group)
+            self.save_order(
+                [i for i in old_order if i != module_id], module.group
+            )
         new_order = self.load_order(target_group)
-        if new_order and src.name not in new_order:
-            new_order.append(src.name)
+        if new_order and module_id not in new_order:
+            new_order.append(module_id)
             self.save_order(new_order, target_group)
         module.group = target_group
 
