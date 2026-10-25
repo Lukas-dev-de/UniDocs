@@ -19,6 +19,15 @@ def main(page: ft.Page):
     cfg = AppConfig()
     store = ModuleStore(root=cfg.unidocs_location)
 
+    # Release the filesystem watcher when the window closes. Its observer
+    # thread is a daemon, so the process would exit anyway - this just closes
+    # the inotify / FSEvents handle instead of leaving it to the OS.
+    def _on_close(e):
+        store.stop_watching()
+        log.debug("window closed, filesystem watcher stopped")
+
+    page.on_close = _on_close
+
     # Keep the window from being squashed so small that the sidebar and the
     # detail pane no longer fit (sidebar is fixed-width, the detail pane needs
     # room for the module grid).
