@@ -45,8 +45,9 @@ concurrency:
 env:
   # Pinned pair. The flet version itself lives in pyproject.toml only; the
   # FLET_CLI_VERSION below is read from there (tools/flet_pin.py) so the two
-  # cannot drift. Check the required Flutter version with
-  #   python -c "import flet.version; print(flet.version.flutter_version)"
+  # cannot drift. FLUTTER_SDK_VERSION is a workflow env and therefore repeated
+  # in ios.yml - tests/test_ci_pins.py asserts both files agree and that the
+  # value matches the Flutter version flet expects (flet.version.flutter_version).
   FLUTTER_SDK_VERSION: "3.41.4"
 
 jobs:

@@ -51,6 +51,9 @@ permissions:
 
 env:
   # The flet version is pinned in pyproject.toml only and read from there.
+  # FLUTTER_SDK_VERSION is repeated in release-build.yml by necessity (separate
+  # workflow env); tests/test_ci_pins.py asserts both files agree and that the
+  # value matches the Flutter version flet expects.
   FLUTTER_SDK_VERSION: "3.41.4"
 
 jobs:
