@@ -39,6 +39,8 @@ from ui.components.home_widgets.recent_modules import RecentModulesWidget
 from ui.components.home_widgets.todos import TodosWidget
 from ui.components.home_widgets.calendar import CalendarWidget
 from ui.components.home_widgets.schedule import ScheduleWidget
+from ui.components.home_widgets.progress import ProgressWidget
+from ui.components.home_widgets.pomodoro import PomodoroWidget
 from ui.context_menu import ContextMenu
 
 log = get_logger(__name__)
@@ -50,6 +52,8 @@ _WIDGET_TYPES = {
     "todos": TodosWidget,
     "calendar": CalendarWidget,
     "schedule": ScheduleWidget,
+    "progress": ProgressWidget,
+    "pomodoro": PomodoroWidget,
 }
 
 # Icon shown for each type in the "add widget" picker.
@@ -59,6 +63,7 @@ _WIDGET_ICONS = {
     "todos": ft.Icons.CHECKLIST,
     "calendar": ft.Icons.CALENDAR_MONTH,
     "schedule": ft.Icons.CALENDAR_VIEW_WEEK,
+    "progress": ft.Icons.TIMELINE,
 }
 
 
