@@ -13,9 +13,10 @@ authors = [
 # workflows read it via tools/flet_pin.py, nothing else pins flet.
 # flet 1.0 changed the socket wire format (4-byte length prefix + type byte
 # instead of a raw msgpack stream), so a mismatched pair talks past each other
-# and the app window stays blank. Bump all four pins together, never just one.
+# and the app window stays blank. Bump all five pins together, never just one.
 dependencies = [
     "flet==0.84.0",
+    "flet-audio==0.84.0",
     "watchdog>=6.0.0",
     "platformdirs>=4.9.6",
 ]
@@ -47,7 +48,9 @@ select = ["E4", "E7", "E9", "F"]
 "tests/*.py" = ["E402"]
 
 [tool.flet]
-desktop_flavor = "light"    # Change to "full" to use flet-audio and flet-video
+# "full" loads the audio plugin the pomodoro widget needs. On Linux this is
+# also what makes flet-audio work under `flet run` (default there is "light").
+desktop_flavor = "full"
 org = "de.buschauermedia"
 product = "unidocs"
 company = "Buschauer Media"

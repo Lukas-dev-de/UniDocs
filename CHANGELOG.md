@@ -4,7 +4,10 @@
    - sidebar: a search button above the home button opens a dialog that searches every module of every group - by module title, module description and document name. A document hit opens its module without starting the file
    - home page: new "Fortschritt" widget. Give it a name and a start and end date (a semester, for example) and the card shows how much of that period has passed: progress bar, percentage and "Tag X von Y"
    - home page: the "Fortschritt" widget can draw its share as a bar or as a 270-degree tacho dial, picked under "Darstellung" in the widget's settings. Files without a choice, or with one this build does not know, keep the bar
+   - home page: the "Pomodoro" widget got a circular countdown ring with the phase name in the middle (Focus Time, Short Break, Long Break, Paused, Ready), phase-coloured accents, one dot per pomodoro of the set, and a start/pause button next to the reset icon
+   - home page: the "Pomodoro" widget now runs the real loop - focus, short break, focus and so on until a long break after the configured number of pomodoros. The next phase can start automatically, and the settings dialog holds focus time with 15/25/45/60 presets, both break lengths, the cycle count, a topic that shows under the timer, and an end-of-phase gong or beep
 - change:
+   - home page: an existing "Pomodoro" card keeps its old total time as the focus time, and its mute switch maps to the "Mute" sound
    - updater: Linux and macOS no longer download or install updates themselves. The update dialog only opens the release page there, so a click never starts a download behind your back. Windows still installs in place, and patch releases still go in on startup there
    - updater: the update dialog button is called "Open release page" where nothing installs itself, and "Install now" on Windows, instead of one button that behaved differently
    - settings: "Install patches automatically" is hidden on Linux and macOS instead of sitting there greyed out with a note under it

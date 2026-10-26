@@ -4,9 +4,10 @@ flet_pin.py
 -----------
 Prints the flet version pinned in ``pyproject.toml``.
 
-There are several flet pins (``flet``, ``flet-cli``, ``flet-desktop``,
-``flet-web``) and they all have to be the same version: the client shell that
-``flet build`` bundles comes from ``flet-cli``, and a client/Python mismatch
+There are several flet pins (``flet``, ``flet-audio``, ``flet-cli``,
+``flet-desktop``, ``flet-web``) and they all have to be the same version: the
+client shell that ``flet build`` bundles comes from ``flet-cli``, and a
+client/Python mismatch
 keeps the app window blank. pyproject.toml is the only place they are written
 down; the build workflows read the number from here instead of repeating it:
 

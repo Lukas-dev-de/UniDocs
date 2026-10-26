@@ -31,8 +31,10 @@ def test_app_version_matches_changelog():
 
 
 def test_flet_pins_agree():
+    # flet, flet-audio plus the three dev clients; the audio extension pins the
+    # flet version it was built for, so it has to move with the rest.
     pins = re.findall(r'"flet[a-z-]*==([^"]+)"', _pyproject_text())
-    assert len(pins) == 4, f"expected 4 flet pins, found {pins}"
+    assert len(pins) == 5, f"expected 5 flet pins, found {pins}"
     assert len(set(pins)) == 1, f"flet pins disagree: {sorted(set(pins))}"
 
 
