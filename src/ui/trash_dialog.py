@@ -37,12 +37,42 @@ class TrashDialog(ft.AlertDialog):
         self._status = ft.Text(
             "", size=12, color=ft.Colors.ON_SURFACE_VARIANT
         )
+        self._pending_action = None
+        self._confirm_label = ft.Text("", size=12, color=ft.Colors.ERROR)
+        self._confirm_yes = ft.FilledButton(
+            "Delete",
+            style=ft.ButtonStyle(
+                bgcolor=ft.Colors.ERROR,
+                color=ft.Colors.ON_ERROR,
+            ),
+            on_click=self._run_confirm,
+        )
+        self._confirm_row = ft.Column(
+            tight=True,
+            spacing=4,
+            visible=False,
+            controls=[
+                self._confirm_label,
+                ft.Row(
+                    spacing=8,
+                    controls=[
+                        ft.TextButton("Cancel", on_click=self._cancel_confirm),
+                        self._confirm_yes,
+                    ],
+                ),
+            ],
+        )
         self.content = ft.Container(
             width=560,
             content=ft.Column(
                 tight=True,
                 spacing=8,
-                controls=[self._list, self._empty_hint, self._status],
+                controls=[
+                    self._list,
+                    self._empty_hint,
+                    self._status,
+                    self._confirm_row,
+                ],
             ),
         )
         self.actions = [
@@ -63,6 +93,7 @@ class TrashDialog(ft.AlertDialog):
     def show(self) -> None:
         self._reload()
         self._status.value = ""
+        self._hide_confirm()
         self.open = True
         try:
             self.update()
@@ -218,28 +249,25 @@ class TrashDialog(ft.AlertDialog):
                 log.debug("trash on_changed failed", exc_info=True)
 
     def _open_confirm(self, title: str, text: str, action) -> None:
-        def close_dialog():
-            dialog.open = False
-            if dialog in self.page.overlay:
-                self.page.overlay.remove(dialog)
-            self.page.update()
+        """Inline confirmation: a second modal dialog cannot close reliably
+        while the trash dialog is open."""
+        self._pending_action = action
+        self._confirm_label.value = f"{title} {text}"
+        self._confirm_row.visible = True
+        self.update()
 
-        def run(e=None):
-            close_dialog()
+    def _hide_confirm(self) -> None:
+        self._pending_action = None
+        self._confirm_label.value = ""
+        self._confirm_row.visible = False
+
+    def _cancel_confirm(self, e=None) -> None:
+        self._hide_confirm()
+        self.update()
+
+    def _run_confirm(self, e=None) -> None:
+        action = self._pending_action
+        self._hide_confirm()
+        self.update()
+        if action is not None:
             action()
-
-        def cancel(e=None):
-            close_dialog()
-
-        dialog = ft.AlertDialog(
-            modal=True,
-            title=ft.Text(title),
-            content=ft.Text(text),
-            actions=[
-                ft.TextButton("Cancel", on_click=cancel),
-                ft.FilledButton("Delete", on_click=run),
-            ],
-        )
-        self.page.overlay.append(dialog)
-        dialog.open = True
-        self.page.update()
