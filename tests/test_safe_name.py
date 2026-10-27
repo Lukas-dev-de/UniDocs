@@ -34,6 +34,11 @@ def test_refuses_parent_and_empty_names(title):
     assert _safe_name(title) == "Untitled"
 
 
+@pytest.mark.parametrize("title", [".trash", ".unidocs-tmp", ".TRASH"])
+def test_reserves_internal_folder_names(title):
+    assert _safe_name(title) == title + "_"
+
+
 @pytest.mark.parametrize(
     ("title", "expected"),
     [

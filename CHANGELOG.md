@@ -6,7 +6,11 @@
    - home page: the "Fortschritt" widget can draw its share as a bar or as a 270-degree tacho dial, picked under "Darstellung" in the widget's settings. Files without a choice, or with one this build does not know, keep the bar
    - home page: the "Pomodoro" widget got a circular countdown ring with the phase name in the middle (Focus Time, Short Break, Long Break, Paused, Ready), phase-coloured accents, one dot per pomodoro of the set, and a start/pause button next to the reset icon
    - home page: the "Pomodoro" widget now runs the real loop - focus, short break, focus and so on until a long break after the configured number of pomodoros. The next phase can start automatically, and the settings dialog holds focus time with 15/25/45/60 presets, both break lengths, the cycle count, a topic that shows under the timer, and an end-of-phase gong or beep
+   - sync: the UniDocs folder can be mirrored between desktop devices through WebDAV (Nextcloud, ownCloud, Synology) or Google Drive. Settings holds the provider and credentials, the sidebar has a sync button with progress, and an optional "Sync on startup" switch. Deletes move into a synced `.trash` folder with a sidebar dialog to restore or purge entries; automatic purge after a configurable number of days is optional
+   - sync: conflicting edits keep both versions as `name (Konflikt <device>-<timestamp>).ext` instead of overwriting one
+   - sync: credentials and OAuth tokens are stored in the OS keyring, with a private `secrets.json` fallback when no keyring is available
 - change:
+   - deleting: documents and modules go to the trash instead of being removed immediately, and the confirmation text says so
    - home page: an existing "Pomodoro" card keeps its old total time as the focus time, and its mute switch maps to the "Mute" sound
    - updater: Linux and macOS no longer download or install updates themselves. The update dialog only opens the release page there, so a click never starts a download behind your back. Windows still installs in place, and patch releases still go in on startup there
    - updater: the update dialog button is called "Open release page" where nothing installs itself, and "Install now" on Windows, instead of one button that behaved differently

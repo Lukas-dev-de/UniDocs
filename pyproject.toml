@@ -19,6 +19,11 @@ dependencies = [
     "flet-audio==0.84.0",
     "watchdog>=6.0.0",
     "platformdirs>=4.9.6",
+    "keyring>=24.0.0",
+    "webdav4>=0.10.0",
+    "google-api-python-client>=2.100.0",
+    "google-auth>=2.23.0",
+    "google-auth-oauthlib>=1.1.0",
 ]
 
 [dependency-groups]

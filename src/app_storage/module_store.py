@@ -40,6 +40,8 @@ from pathlib import Path
 import flet as ft
 
 from app_storage.io_utils import write_json
+from app_storage.naming import RESERVED_ROOT_DIRS
+from app_storage.trash_store import TrashStore
 from app_logging import get_logger
 from models.module import Module
 from models.document import Document
@@ -140,14 +142,31 @@ class ModuleStore:
         Called (no arguments) from a background thread on filesystem changes.
     """
 
-    def __init__(self, root: Path = UNIDOCS_DIR, on_change=None):
+    def __init__(
+        self,
+        root: Path = UNIDOCS_DIR,
+        on_change=None,
+        device_id: str = "",
+        device_name: str = "",
+    ):
         self.root = root
         self.root.mkdir(parents=True, exist_ok=True)
         self._on_change = on_change
         self._observer = None
         self._watch_lock = threading.Lock()
+        self._watch_suspend = 0
+        self._watch_suspend_lock = threading.Lock()
+        self._change_timer = None
+        self._change_lock = threading.Lock()
+        self._device_id = device_id
+        self._device_name = device_name
         self._tags_cache = None
         self._cache_lock = threading.RLock()
+
+    @property
+    def trash(self) -> TrashStore:
+        """Trash store bound to the current root (the settings dialog may change it)."""
+        return TrashStore(self.root, self._device_id, self._device_name)
 
     # -- module CRUD ----------------------------------------------------------
 
@@ -208,7 +227,7 @@ class ModuleStore:
     def delete_module(self, module: Module):
         folder = self._folder_for(module)
         if folder.exists():
-            shutil.rmtree(folder)
+            self.trash.move_to_trash(folder, "module", module_id=module.id)
 
     def rename_module(self, module: Module, new_title: str):
         old_folder = self._folder_for(module)
@@ -428,18 +447,24 @@ class ModuleStore:
         return str(new_path)
 
     def delete_document(self, module: Module, doc: Document) -> None:
-        """Delete a document file from disk and remove it from module.documents."""
+        """Move a document into the trash and drop it from module.documents."""
         path = Path(doc.filepath)
-
-        # remove from .doc_tags
         folder = path.parent
         doc_tags = self._read_doc_tags(folder)
+
+        if path.exists():
+            self.trash.move_to_trash(
+                path,
+                "document",
+                module_id=module.id,
+                doc_tags=doc_tags.get(path.name, []),
+            )
+
+        # Only drop the tag mapping once the file is safely in the trash.
         if path.name in doc_tags:
             del doc_tags[path.name]
             self._write_doc_tags(folder, doc_tags)
 
-        if path.exists():
-            path.unlink()
         module.documents = [d for d in module.documents if d.filepath != doc.filepath]
 
     # -- tag registry CRUD ----------------------------------------------------
@@ -587,6 +612,11 @@ class ModuleStore:
                 def on_any_event(self, event):
                     if event.event_type in _read_noise:
                         return
+                    if store._watching_suspended():
+                        return
+                    paths = [getattr(event, "src_path", ""), getattr(event, "dest_path", "")]
+                    if any(store._is_ignored_path(p) for p in paths if p):
+                        return
                     # Our own bookkeeping files: .meta and .order are written
                     # by code that repaints itself, and .home.json is the home
                     # page's own config, so reacting here would only trigger a
@@ -597,8 +627,7 @@ class ModuleStore:
                         HOME_FILENAME,
                     ):
                         return
-                    if store._on_change:
-                        store._on_change()
+                    store._schedule_change()
 
             observer = Observer()
             observer.schedule(_Handler(), str(self.root), recursive=True)
@@ -612,6 +641,54 @@ class ModuleStore:
                 self._observer.stop()
                 self._observer.join(timeout=2)
                 self._observer = None
+        with self._change_lock:
+            if self._change_timer is not None:
+                self._change_timer.cancel()
+                self._change_timer = None
+
+    def suspend_watching(self) -> None:
+        """Stop reacting to filesystem events (used while the sync writes)."""
+        with self._watch_suspend_lock:
+            self._watch_suspend += 1
+
+    def resume_watching(self) -> None:
+        with self._watch_suspend_lock:
+            if self._watch_suspend > 0:
+                self._watch_suspend -= 1
+
+    def _watching_suspended(self) -> bool:
+        with self._watch_suspend_lock:
+            return self._watch_suspend > 0
+
+    def _is_ignored_path(self, path: str) -> bool:
+        """Internal folders, temp files and OS junk never trigger a reload."""
+        p = Path(path)
+        name = p.name
+        if name.endswith(".tmp") or name in (".DS_Store", "Thumbs.db", "desktop.ini"):
+            return True
+        if name.startswith("~$"):
+            return True
+        try:
+            rel = p.resolve().relative_to(self.root.resolve())
+        except (ValueError, OSError, RuntimeError):
+            return True
+        return any(part in RESERVED_ROOT_DIRS for part in rel.parts)
+
+    def _schedule_change(self) -> None:
+        """Coalesce a burst of filesystem events into one reload."""
+        with self._change_lock:
+            if self._change_timer is not None:
+                return
+            timer = threading.Timer(0.2, self._emit_change)
+            timer.daemon = True
+            self._change_timer = timer
+            timer.start()
+
+    def _emit_change(self) -> None:
+        with self._change_lock:
+            self._change_timer = None
+        if self._on_change:
+            self._on_change()
 
     # -- private helpers ------------------------------------------------------
 
@@ -717,6 +794,8 @@ def _safe_name(title: str) -> str:
         cleaned = cleaned[:MAX_NAME_LENGTH].rstrip(". ")
     if not cleaned or cleaned in {".", ".."}:
         return "Untitled"
+    if cleaned.lower() in {name.lower() for name in RESERVED_ROOT_DIRS}:
+        cleaned = f"{cleaned}_"
     if cleaned.split(".")[0].strip().upper() in _WINDOWS_RESERVED:
         cleaned = f"{cleaned}_"
     return cleaned

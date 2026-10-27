@@ -169,4 +169,6 @@ installer/Output/
 
 #config
 config.json
+gdrive_client_secret.json
+secrets.json
 

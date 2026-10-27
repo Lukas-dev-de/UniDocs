@@ -651,7 +651,8 @@ class ModuleDetail(ft.Container):
 
         dlg = ConfirmDialog(
             "Delete documents",
-            f"Delete {len(docs)} documents? This cannot be undone.",
+            f"Delete {len(docs)} documents? They move to the trash and are "
+            "removed on synced devices.",
             on_confirm,
         )
         self.page.overlay.append(dlg)
@@ -906,7 +907,8 @@ class ModuleDetail(ft.Container):
 
         dlg = ConfirmDialog(
             "Delete document",
-            f'Delete "{doc.title}"? This cannot be undone.',
+            f'Delete "{doc.title}"? It moves to the trash and is removed on '
+            "synced devices.",
             on_confirm
         )
         self.page.overlay.append(dlg)

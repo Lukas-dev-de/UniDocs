@@ -3,8 +3,12 @@ from pathlib import Path
 from app_info import APP_VERSION, CHANGELOG_URL, ISSUES_URL, REPO_URL, RELEASES_URL
 from app_storage.module_store import ModuleStore
 from app_storage.app_config import AppConfig
+from app_storage.secrets_store import SecretsStore
 from app_logging import get_logger
 import updater
+from sync.gdrive import TOKEN_KEY
+from sync.service import webdav_password_key
+from sync.webdav import WebDAVProvider
 from ui.theme import MODE_LABELS, PALETTES, ThemeManager
 from ui.update_install import UpdateInstaller
 
@@ -42,11 +46,19 @@ class SettingsDialog(ft.AlertDialog):
             The caller is responsible for reloading the store / sidebar.
     """
 
-    def __init__(self, store: ModuleStore, on_location_change=None, theme: ThemeManager | None = None):
+    def __init__(
+        self,
+        store: ModuleStore,
+        on_location_change=None,
+        theme: ThemeManager | None = None,
+        sync_service=None,
+    ):
         super().__init__()
         self._store = store
         self._cfg = AppConfig()
         self._on_location_change = on_location_change
+        self._sync_service = sync_service
+        self._secrets = SecretsStore()
         # Shared with main.py when available; otherwise a local fallback is
         # created and attached once this dialog mounts.
         self._theme = theme or ThemeManager(self._cfg)
@@ -192,7 +204,148 @@ class SettingsDialog(ft.AlertDialog):
             disabled=not self._cfg.restore_group,
         )
 
-        #  LAYOUT 
+        #  cloud sync controls
+        self._sync_provider = ft.Dropdown(
+            label="Cloud sync",
+            value=self._cfg.sync_provider,
+            options=[
+                ft.dropdown.Option(key="off", text="Off (local only)"),
+                ft.dropdown.Option(key="webdav", text="Nextcloud / WebDAV"),
+                ft.dropdown.Option(key="gdrive", text="Google Drive"),
+            ],
+            on_select=self._on_sync_provider_change,
+            expand=True,
+        )
+        self._webdav_url = ft.TextField(
+            label="Server URL",
+            value=self._cfg.webdav_url,
+            hint_text="https://cloud.example.com/remote.php/dav/files/user",
+            dense=True,
+        )
+        self._webdav_user = ft.TextField(
+            label="Username",
+            value=self._cfg.webdav_username,
+            dense=True,
+        )
+        self._webdav_password = ft.TextField(
+            label="App password",
+            hint_text="Leave empty to keep the saved password",
+            password=True,
+            can_reveal_password=True,
+            dense=True,
+        )
+        self._webdav_root = ft.TextField(
+            label="Remote folder",
+            value=self._cfg.webdav_root,
+            dense=True,
+        )
+        self._webdav_save = ft.FilledButton(
+            "Save & test",
+            icon=ft.Icons.CLOUD_DONE_OUTLINED,
+            on_click=self._save_webdav,
+        )
+        self._sync_progress = ft.ProgressRing(
+            width=16, height=16, stroke_width=2, visible=False
+        )
+        self._sync_status = ft.Text(
+            "", size=12, color=ft.Colors.ON_SURFACE_VARIANT
+        )
+        self._webdav_group = ft.Column(
+            spacing=6,
+            tight=True,
+            controls=[
+                self._webdav_url,
+                self._webdav_user,
+                self._webdav_password,
+                self._webdav_root,
+                ft.Row(
+                    spacing=8,
+                    controls=[self._webdav_save, self._sync_progress],
+                ),
+            ],
+        )
+
+        self._gdrive_secret_path = ft.TextField(
+            label="OAuth client_secret.json",
+            value=self._cfg.gdrive_client_secret_path,
+            hint_text="Your own Google Cloud desktop client",
+            dense=True,
+            expand=True,
+        )
+        self._gdrive_browse = ft.IconButton(
+            icon=ft.Icons.FOLDER_OPEN,
+            tooltip="Choose client_secret.json",
+            on_click=self._pick_client_secret,
+        )
+        self._gdrive_connect = ft.FilledButton(
+            "Connect & sync",
+            icon=ft.Icons.LOGIN,
+            on_click=self._google_connect,
+        )
+        self._gdrive_disconnect = ft.TextButton(
+            "Disconnect",
+            icon=ft.Icons.LOGOUT,
+            on_click=self._google_disconnect,
+        )
+        self._gdrive_group = ft.Column(
+            spacing=6,
+            tight=True,
+            controls=[
+                ft.Row(
+                    spacing=4,
+                    controls=[self._gdrive_secret_path, self._gdrive_browse],
+                ),
+                ft.Row(
+                    spacing=8,
+                    controls=[self._gdrive_connect, self._gdrive_disconnect],
+                ),
+                ft.Text(
+                    "The app only sees files it created itself (drive.file scope).",
+                    size=12,
+                    color=ft.Colors.ON_SURFACE_VARIANT,
+                ),
+            ],
+        )
+
+        self._sync_on_start_switch = ft.Switch(
+            label="Sync on startup",
+            value=self._cfg.sync_on_start,
+            on_change=self._on_sync_on_start_change,
+        )
+        self._sync_now_button = ft.FilledButton(
+            "Sync now",
+            icon=ft.Icons.CLOUD_SYNC,
+            on_click=self._sync_now,
+        )
+        self._trash_auto_switch = ft.Switch(
+            label="Empty trash automatically",
+            value=self._cfg.trash_auto_empty_enabled,
+            on_change=self._on_trash_auto_change,
+        )
+        self._trash_days = ft.TextField(
+            label="Keep trash for (days)",
+            value=str(self._cfg.trash_retention_days),
+            width=150,
+            dense=True,
+            disabled=not self._cfg.trash_auto_empty_enabled,
+            on_blur=self._on_trash_days_change,
+            on_submit=self._on_trash_days_change,
+        )
+        self._sync_section = self._section(
+            "Cloud sync",
+            self._sync_provider,
+            self._webdav_group,
+            self._gdrive_group,
+            self._sync_status,
+            self._sync_on_start_switch,
+            self._sync_now_button,
+            ft.Divider(height=1),
+            self._trash_auto_switch,
+            self._trash_days,
+        )
+        self._apply_sync_visibility()
+
+        #  LAYOUT
         self.modal = True
         # Flet fires this when the dialog closes for any reason - keep the
         # keyboard hook tidy even if we did not close it ourselves.
@@ -274,6 +427,11 @@ class SettingsDialog(ft.AlertDialog):
                     self._auto_patch_switch,
                     self._auto_patch_note,
                 ),
+
+                    ft.Divider(height=1),
+
+                # Cloud sync + trash retention
+                self._sync_section,
 
                     ft.Divider(height=1),
 
@@ -434,7 +592,166 @@ class SettingsDialog(ft.AlertDialog):
             self._cfg.restore_module and self._cfg.restore_group
         )
 
-    #  public 
+    #  cloud sync helpers
+
+    def _apply_sync_visibility(self) -> None:
+        provider = self._cfg.sync_provider
+        self._webdav_group.visible = provider == "webdav"
+        self._gdrive_group.visible = provider == "gdrive"
+        self._sync_now_button.disabled = provider == "off"
+        self._trash_days.disabled = not self._cfg.trash_auto_empty_enabled
+
+    def _sync_sync_controls(self) -> None:
+        self._sync_provider.value = self._cfg.sync_provider
+        self._webdav_url.value = self._cfg.webdav_url
+        self._webdav_user.value = self._cfg.webdav_username
+        self._webdav_password.value = ""
+        self._webdav_root.value = self._cfg.webdav_root
+        self._gdrive_secret_path.value = self._cfg.gdrive_client_secret_path
+        self._sync_on_start_switch.value = self._cfg.sync_on_start
+        self._trash_auto_switch.value = self._cfg.trash_auto_empty_enabled
+        self._trash_days.value = str(self._cfg.trash_retention_days)
+        self._sync_status.value = ""
+        self._sync_progress.visible = False
+        self._apply_sync_visibility()
+
+    def _on_sync_provider_change(self, e) -> None:
+        self._cfg.sync_provider = self._sync_provider.value or "off"
+        self._apply_sync_visibility()
+        self._sync_status.value = ""
+        self.update()
+
+    def _on_sync_on_start_change(self, e) -> None:
+        self._cfg.sync_on_start = bool(self._sync_on_start_switch.value)
+
+    def _on_trash_auto_change(self, e) -> None:
+        self._cfg.trash_auto_empty_enabled = bool(self._trash_auto_switch.value)
+        self._trash_days.disabled = not self._cfg.trash_auto_empty_enabled
+        self.update()
+
+    def _on_trash_days_change(self, e) -> None:
+        try:
+            days = int((self._trash_days.value or "").strip())
+        except ValueError:
+            days = self._cfg.trash_retention_days
+        self._cfg.trash_retention_days = days
+        self._trash_days.value = str(self._cfg.trash_retention_days)
+        self.update()
+
+    def _save_webdav(self, e) -> None:
+        url = (self._webdav_url.value or "").strip()
+        user = (self._webdav_user.value or "").strip()
+        root = (self._webdav_root.value or "UniDocs").strip() or "UniDocs"
+        password = self._webdav_password.value or ""
+        self._cfg.webdav_url = url
+        self._cfg.webdav_username = user
+        self._cfg.webdav_root = root
+        self._set_sync_busy(True, "Connecting…")
+        page = self.page
+        if page is None:
+            return
+        page.run_thread(lambda: self._test_webdav_worker(url, user, password, root))
+
+    def _test_webdav_worker(self, url, user, password, root) -> None:
+        error = None
+        try:
+            if not url:
+                raise ValueError("Server URL is missing")
+            if password:
+                self._secrets.set_secret(webdav_password_key(url, user), password)
+            else:
+                password = self._secrets.get_secret(webdav_password_key(url, user)) or ""
+                if not password:
+                    raise ValueError("App password is missing")
+            provider = WebDAVProvider(url, user, password, remote_root=root)
+            try:
+                provider.test_connection()
+            finally:
+                provider.close()
+        except Exception as ex:
+            error = str(ex)
+        page = self.page
+        if page is not None:
+            page.run_task(self._show_webdav_result, error)
+
+    async def _show_webdav_result(self, error) -> None:
+        self._set_sync_busy(False)
+        if error:
+            self._set_sync_status(f"Error: {error}", error=True)
+        else:
+            self._set_sync_status("Connection successful.")
+        self.update()
+
+    def _set_sync_busy(self, busy: bool, message: str = "") -> None:
+        self._webdav_save.disabled = busy
+        self._sync_progress.visible = busy
+        if message:
+            self._set_sync_status(message)
+
+    def _set_sync_status(self, message: str, *, error: bool = False) -> None:
+        self._sync_status.value = message
+        self._sync_status.color = (
+            ft.Colors.ERROR if error else ft.Colors.ON_SURFACE_VARIANT
+        )
+
+    async def _pick_client_secret(self, e) -> None:
+        files = await ft.FilePicker().pick_files(
+            allow_multiple=False,
+            allowed_extensions=["json"],
+            dialog_title="Google client_secret.json",
+        )
+        if files:
+            path = getattr(files[0], "path", "") or ""
+            if path:
+                self._gdrive_secret_path.value = path
+                self._cfg.gdrive_client_secret_path = path
+                self.update()
+
+    def _google_connect(self, e) -> None:
+        path = (self._gdrive_secret_path.value or "").strip()
+        self._cfg.gdrive_client_secret_path = path
+        if self._sync_service is None:
+            self._set_sync_status("Sync service is not available.", error=True)
+            self.update()
+            return
+        if not self._sync_service.start(interactive=True):
+            self._set_sync_status("A sync is already running or the provider is off.", error=True)
+        else:
+            self._set_sync_status("Google login in the browser…")
+        self.update()
+
+    def _google_disconnect(self, e) -> None:
+        page = self.page
+        if page is None:
+            return
+        page.run_thread(self._google_disconnect_worker)
+
+    def _google_disconnect_worker(self) -> None:
+        try:
+            self._secrets.delete_secret(TOKEN_KEY)
+            message = "Google Drive disconnected."
+        except Exception as ex:
+            message = f"Disconnect failed: {ex}"
+        page = self.page
+        if page is not None:
+            page.run_task(self._show_sync_message, message)
+
+    async def _show_sync_message(self, message: str) -> None:
+        self._set_sync_status(message)
+        self.update()
+
+    def _sync_now(self, e) -> None:
+        if self._sync_service is None:
+            self._set_sync_status("Sync service is not available.", error=True)
+            self.update()
+            return
+        if not self._sync_service.start():
+            self._set_sync_status("A sync is already running or the provider is off.", error=True)
+        else:
+            self._set_sync_status("Sync started…")
+        self.update()
+
+    #  public
 
     def show(self) -> None:
         """Open the dialog, re-syncing the appearance controls first."""
@@ -442,9 +759,11 @@ class SettingsDialog(ft.AlertDialog):
         # back (see _unhook_resize), and did_mount does not fire again.
         self._hook_resize()
         self._apply_layout()
+        self._cfg.reload()
         self._sync_mode_selector()
         self._sync_palette_dropdown()
         self._sync_startup_switches()
+        self._sync_sync_controls()
         self._status.value = ""
         self._reset_update_section()
         self._install_key_handler()
