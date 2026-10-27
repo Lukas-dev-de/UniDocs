@@ -6,7 +6,7 @@ from app_storage.app_config import AppConfig
 from app_storage.secrets_store import SecretsStore
 from app_logging import get_logger
 import updater
-from sync.gdrive import TOKEN_KEY
+from sync.gdrive import TOKEN_KEY, resolve_client_secret
 from sync.service import webdav_password_key
 from sync.webdav import WebDAVProvider
 from ui.theme import MODE_LABELS, PALETTES, ThemeManager
@@ -287,14 +287,23 @@ class SettingsDialog(ft.AlertDialog):
             icon=ft.Icons.LOGOUT,
             on_click=self._google_disconnect,
         )
+        self._gdrive_secret_row = ft.Row(
+            spacing=4,
+            controls=[self._gdrive_secret_path, self._gdrive_browse],
+        )
+        self._gdrive_managed_note = ft.Text(
+            "This build includes the Google app registration. Click Connect & sync "
+            "and sign in with your own Google account; files stay in your Drive.",
+            size=12,
+            color=ft.Colors.ON_SURFACE_VARIANT,
+        )
         self._gdrive_group = ft.Column(
             spacing=6,
             tight=True,
             controls=[
-                ft.Row(
-                    spacing=4,
-                    controls=[self._gdrive_secret_path, self._gdrive_browse],
-                ),
+                ft.Text("Google Drive", weight=ft.FontWeight.W_600),
+                self._gdrive_managed_note,
+                self._gdrive_secret_row,
                 ft.Row(
                     spacing=8,
                     controls=[self._gdrive_connect, self._gdrive_disconnect],
@@ -344,6 +353,7 @@ class SettingsDialog(ft.AlertDialog):
             self._trash_days,
         )
         self._apply_sync_visibility()
+        self._apply_gdrive_visibility()
 
         #  LAYOUT
         self.modal = True
@@ -597,9 +607,15 @@ class SettingsDialog(ft.AlertDialog):
     def _apply_sync_visibility(self) -> None:
         provider = self._cfg.sync_provider
         self._webdav_group.visible = provider == "webdav"
-        self._gdrive_group.visible = provider == "gdrive"
+        # Offer the one-click Google login also while sync is off.
+        self._gdrive_group.visible = provider in ("off", "gdrive")
         self._sync_now_button.disabled = provider == "off"
         self._trash_days.disabled = not self._cfg.trash_auto_empty_enabled
+
+    def _apply_gdrive_visibility(self) -> None:
+        managed = bool(resolve_client_secret(self._cfg.gdrive_client_secret_path))
+        self._gdrive_managed_note.visible = managed
+        self._gdrive_secret_row.visible = not managed
 
     def _sync_sync_controls(self) -> None:
         self._sync_provider.value = self._cfg.sync_provider
@@ -614,6 +630,7 @@ class SettingsDialog(ft.AlertDialog):
         self._sync_status.value = ""
         self._sync_progress.visible = False
         self._apply_sync_visibility()
+        self._apply_gdrive_visibility()
 
     def _on_sync_provider_change(self, e) -> None:
         self._cfg.sync_provider = self._sync_provider.value or "off"
@@ -710,6 +727,16 @@ class SettingsDialog(ft.AlertDialog):
     def _google_connect(self, e) -> None:
         path = (self._gdrive_secret_path.value or "").strip()
         self._cfg.gdrive_client_secret_path = path
+        self._cfg.sync_provider = "gdrive"
+        self._sync_provider.value = "gdrive"
+        self._apply_sync_visibility()
+        if not resolve_client_secret(path):
+            self._set_sync_status(
+                "This build has no Google client. Select client_secret.json first.",
+                error=True,
+            )
+            self.update()
+            return
         if self._sync_service is None:
             self._set_sync_status("Sync service is not available.", error=True)
             self.update()
@@ -717,6 +744,10 @@ class SettingsDialog(ft.AlertDialog):
         if not self._sync_service.start(interactive=True):
             self._set_sync_status("A sync is already running or the provider is off.", error=True)
         else:
+            # Connected once, then keep syncing on every start. The switch
+            # stays visible so the user can turn it off again.
+            self._cfg.sync_on_start = True
+            self._sync_on_start_switch.value = True
             self._set_sync_status("Google login in the browser…")
         self.update()
 

@@ -21,11 +21,16 @@ are supported on desktop (Windows, macOS, Linux):
   `https://cloud.example.com/remote.php/dav/files/USER`), username, an app password
   (2FA accounts need one) and the remote folder (default `UniDocs`). "Save & test"
   stores the password in the OS keyring and checks the connection.
-- **Google Drive:** the app uses the `drive.file` scope, so it only sees files it
-  created itself. Select your own Google Cloud desktop OAuth `client_secret.json` in
-  the settings, or ship one via the `UNIDOCS_GDRIVE_CLIENT_SECRET` environment
-  variable / a `src/gdrive_client_secret.json` file at build time. "Connect & sync"
-  opens the browser login; the refresh token is stored in the keyring. Publish the
+- **Google Drive:** every user signs in with their **own Google account**; files
+  go into that user's own Drive. The OAuth client is only the app registration, it
+  does not share accounts or storage. The app uses the `drive.file` scope, so it
+  only sees files it created itself. Select your own Google Cloud desktop OAuth
+  `client_secret.json` in the settings, or ship one via the
+  `UNIDOCS_GDRIVE_CLIENT_SECRET` environment variable / a
+  `src/gdrive_client_secret.json` file at build time (release workflow: repository
+  secret `UNIDOCS_GDRIVE_CLIENT_SECRET_JSON`). With a bundled client the settings
+  hide the file picker and the user only clicks "Connect & sync". That opens the
+  browser login; the refresh token is stored in the user's keyring. Publish the
   OAuth consent screen to "In production", otherwise testing tokens expire after
   seven days.
 

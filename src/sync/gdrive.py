@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import random
 import time
 from datetime import datetime
@@ -31,8 +32,27 @@ SCOPES = ["https://www.googleapis.com/auth/drive.file"]
 TOKEN_KEY = "gdrive_token"
 FOLDER_MIME = "application/vnd.google-apps.folder"
 SHORTCUT_MIME = "application/vnd.google-apps.shortcut"
-FIELDS = "id,name,mimeType,size,modifiedTime,md5Checksum,parents,trashed,etag"
+FIELDS = "id,name,mimeType,size,modifiedTime,md5Checksum,parents,trashed"
 ROOT_NAME = "UniDocs"
+BUNDLED_CLIENT_SECRET = Path(__file__).parent.parent / "gdrive_client_secret.json"
+
+
+def resolve_client_secret(configured: str = "") -> str:
+    """Find the desktop OAuth client JSON.
+
+    Order: user-selected file, build-time env, bundled file. A release can ship
+    one client so the user only clicks "Connect & sync"; the installed-app
+    secret is not confidential, but bundling it means Google can revoke it if
+    it gets abused.
+    """
+    if configured and Path(configured).is_file():
+        return configured
+    env = os.environ.get("UNIDOCS_GDRIVE_CLIENT_SECRET", "").strip()
+    if env and Path(env).is_file():
+        return env
+    if BUNDLED_CLIENT_SECRET.is_file():
+        return str(BUNDLED_CLIENT_SECRET)
+    return configured
 
 
 def load_credentials(

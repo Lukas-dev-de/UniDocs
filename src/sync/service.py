@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import logging
-import os
 import threading
 import time
 from pathlib import Path
@@ -14,7 +13,7 @@ from app_storage.secrets_store import SecretsStore
 from app_storage.trash_store import TrashStore
 from sync.base import BaseSyncProvider, SyncAuthError, SyncProviderError
 from sync.engine import SyncEngine
-from sync.gdrive import GDriveProvider, load_credentials
+from sync.gdrive import GDriveProvider, load_credentials, resolve_client_secret
 from sync.state import SyncState
 from sync.types import SyncReport
 from sync.webdav import WebDAVProvider
@@ -33,17 +32,6 @@ def provider_identity(cfg: AppConfig, gdrive_folder_id: str = "") -> str:
     if cfg.sync_provider == "gdrive":
         return f"gdrive:{gdrive_folder_id or cfg.gdrive_folder_id or 'auto'}"
     return "off"
-
-
-def _gdrive_client_secret(configured: str) -> str:
-    """Config path first, then build-time env, then a bundled file."""
-    if configured:
-        return configured
-    env = os.environ.get("UNIDOCS_GDRIVE_CLIENT_SECRET", "").strip()
-    if env:
-        return env
-    bundled = Path(__file__).parent.parent / "gdrive_client_secret.json"
-    return str(bundled) if bundled.is_file() else ""
 
 
 def provider_label(cfg: AppConfig) -> str:
@@ -200,7 +188,7 @@ class SyncService:
             return provider, provider_identity(self.cfg)
 
         if provider_name == "gdrive":
-            client_secret = _gdrive_client_secret(self.cfg.gdrive_client_secret_path)
+            client_secret = resolve_client_secret(self.cfg.gdrive_client_secret_path)
             creds = load_credentials(
                 client_secret,
                 self.secrets,

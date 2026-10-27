@@ -9,10 +9,15 @@ import pytest
 from app_storage.trash_store import TrashStore
 from sync.base import SyncAuthError, SyncNotFoundError
 from sync.engine import SyncEngine
-from sync.gdrive import FOLDER_MIME, GDriveProvider, load_credentials
+from sync.gdrive import (
+    FOLDER_MIME,
+    GDriveProvider,
+    load_credentials,
+    resolve_client_secret,
+)
 from sync.state import SyncState
 
-MD5_FIELDS = ("id", "name", "mimeType", "size", "modifiedTime", "md5Checksum", "parents", "trashed", "etag")
+MD5_FIELDS = ("id", "name", "mimeType", "size", "modifiedTime", "md5Checksum", "parents", "trashed")
 
 
 class FakeHttpError(Exception):
@@ -308,6 +313,28 @@ class NullStore:
 def test_load_credentials_without_token_needs_interaction(tmp_path):
     with pytest.raises(SyncAuthError):
         load_credentials(str(tmp_path / "missing.json"), NullStore(), interactive=False)
+
+
+def test_resolve_client_secret_order(tmp_path, monkeypatch):
+    import sync.gdrive as gdrive
+
+    bundled = tmp_path / "bundled.json"
+    env_file = tmp_path / "env.json"
+    configured = tmp_path / "configured.json"
+    monkeypatch.setattr(gdrive, "BUNDLED_CLIENT_SECRET", bundled)
+    monkeypatch.delenv("UNIDOCS_GDRIVE_CLIENT_SECRET", raising=False)
+
+    assert resolve_client_secret("") == ""
+
+    bundled.write_text("{}", encoding="utf-8")
+    assert resolve_client_secret("") == str(bundled)
+
+    env_file.write_text("{}", encoding="utf-8")
+    monkeypatch.setenv("UNIDOCS_GDRIVE_CLIENT_SECRET", str(env_file))
+    assert resolve_client_secret("") == str(env_file)
+
+    configured.write_text("{}", encoding="utf-8")
+    assert resolve_client_secret(str(configured)) == str(configured)
 
 
 def _sync(root, state_path, drive):
