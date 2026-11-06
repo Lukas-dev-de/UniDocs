@@ -1,7 +1,23 @@
 # Handoff: Web-Hosting + Google Drive (Stand 2026-11-06)
 
 Weiterarbeiten nur auf **code-server** (`/root/Private/UniDocs`).
-Lokaler Rechner ist nicht mehr noetig.
+Der fruehere Arch-Linux-PC ist ausgeschaltet und wird nicht mehr gebraucht.
+Alles Noetige liegt im Repo und auf code-server.
+
+## Schnellstart auf code-server
+
+```bash
+ssh root@code-server
+cd /root/Private/UniDocs
+git pull --ff-only
+systemctl status unidocs-web
+journalctl -u unidocs-web -f
+```
+
+Web-App: `https://code-server.tailfd3336.ts.net:8443/`
+Handoff: `/root/Private/UniDocs/.continue/notes/handoff-web-drive.md`
+
+Repo-Stand: Branch `feature/web-hosting`, Commit `49930a1`, Working Tree clean.
 
 ## Erledigt und gepusht
 
@@ -79,7 +95,11 @@ zurueckspielen und `pct reboot 101`.
 
 ### 2. Google-Login fuer rclone
 
-Code-Server hat keinen Browser. SSH-Portweiterleitung nutzen:
+Code-Server hat keinen Browser. Es wird ein zweites Geraet mit Browser und
+SSH-Client gebraucht (Laptop, iPad mit Termius/Blink, ...). Der alte Arch-PC
+ist dafuer nicht noetig.
+
+Variante A - SSH-Portweiterleitung:
 
 ```bash
 ssh -L 53682:127.0.0.1:53682 root@code-server
@@ -91,8 +111,8 @@ Im SSH:
 rclone config reconnect gdrive: --auth-no-open-browser
 ```
 
-Die ausgegebene URL im lokalen Browser oeffnen. Der Redirect geht auf
-`http://127.0.0.1:53682/...`, also durch den SSH-Tunnel. Login abschliessen.
+Die ausgegebene URL im Browser des zweiten Geraets oeffnen. Der Redirect geht
+auf `http://127.0.0.1:53682/...`, also durch den SSH-Tunnel. Login abschliessen.
 Danach:
 
 ```bash
@@ -100,6 +120,17 @@ rclone lsd gdrive:
 ```
 
 Erwartet: Liste der Drive-Ordner.
+
+Variante B - Token von einem anderen Rechner einspielen:
+
+```bash
+# auf dem Rechner mit Browser und rclone:
+rclone authorize "drive" --client-id "<ID>" --client-secret "<SECRET>"
+```
+
+Den ausgegebenen Token-Block auf code-server in `rclone config` bei `gdrive:`
+als `token` eintragen (`rclone config edit gdrive:`). ID/Secret stehen in
+`/root/.config/rclone/rclone.conf` und `/root/.config/rclone/client_secret.json`.
 
 ### 3. Mounten
 
