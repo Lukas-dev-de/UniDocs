@@ -12,6 +12,7 @@ from ui.components.dialogs import ConfirmDialog, RenameDialog
 from pathlib import Path
 import subprocess
 import sys
+from urllib.parse import quote
 
 log = get_logger(__name__)
 
@@ -917,6 +918,12 @@ class ModuleDetail(ft.Container):
     #  file opener
 
     def _open_file(self, filepath: str):
+        # In the browser there is no desktop app behind xdg-open/open: the
+        # server hands the file out through /files (see tools/serve_web.py).
+        if self.page is not None and getattr(self.page, "web", False):
+            self._open_file_in_browser(filepath)
+            return
+
         try:
             if sys.platform == "win32":
                 import os
@@ -928,3 +935,20 @@ class ModuleDetail(ft.Container):
         except Exception as ex:
             log.exception("Could not open file %s", filepath)
             self.show_error(f"Could not open {Path(filepath).name}: {ex}")
+
+    def _open_file_in_browser(self, filepath: str):
+        """Open a document through the web server's /files route."""
+        try:
+            relative = Path(filepath).resolve().relative_to(self._store.root.resolve())
+        except (OSError, ValueError):
+            log.exception("File is outside the document root: %s", filepath)
+            self.show_error(f"Could not open {Path(filepath).name}: outside storage folder")
+            return
+
+        url = "/files/" + quote(relative.as_posix())
+        # A new tab keeps the PWA (and its session) on the current page.
+        self.page.run_task(
+            ft.UrlLauncher().launch_url,
+            url,
+            web_only_window_name="_blank",
+        )

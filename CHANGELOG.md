@@ -1,6 +1,7 @@
 # CHANGELOG
 ## v2.5.1 - Unreleased
 - new:
+   - web: `tools/serve_web.py` hosts UniDocs as a dynamic web app on a home server, so an iPad can open it over Tailscale and add it to the home screen. Documents stay on the server; opening one downloads it through the server instead of calling `xdg-open`
    - sidebar: a search button above the home button opens a dialog that searches every module of every group - by module title, module description and document name. A document hit opens its module without starting the file
    - home page: new "Fortschritt" widget. Give it a name and a start and end date (a semester, for example) and the card shows how much of that period has passed: progress bar, percentage and "Tag X von Y"
    - home page: the "Fortschritt" widget can draw its share as a bar or as a 270-degree tacho dial, picked under "Darstellung" in the widget's settings. Files without a choice, or with one this build does not know, keep the bar

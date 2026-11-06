@@ -21,6 +21,14 @@ dependencies = [
     "platformdirs>=4.9.6",
 ]
 
+[project.optional-dependencies]
+# Dynamic web hosting on a home server: Python keeps running on the server,
+# the browser only renders the Flet UI. See tools/serve_web.py.
+web = [
+    "flet-web==0.84.0",
+    "uvicorn[standard]>=0.35",
+]
+
 [dependency-groups]
 dev = [
     "flet-cli==0.84.0",

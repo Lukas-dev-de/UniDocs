@@ -135,12 +135,38 @@ To test it locally after the build above:
 
 ### Web
 
-There is no web build, and the release workflow does not make one. `flet build web`
+There is no static web build, and the release workflow does not make one. `flet build web`
 resolves dependencies for Pyodide and fails on `watchdog`, which the app needs for its
 filesystem watcher (`src/app_storage/module_store.py`) and which has no wheel there.
-UniDocs is local-first anyway: the storage folder, the watcher and "open document" all
-belong on the machine that runs the Python side, not in a browser tab. `flet run --web`
-still works for local development, where that Python side runs on your machine.
+
+A *dynamic* web server is supported instead: Python keeps running on the machine that
+holds the documents, and the browser only renders the Flet UI. That also works on an iPad
+over Tailscale, without the App Store:
+
+```bash
+./.venv/bin/pip install -e '.[web]'
+./.venv/bin/python tools/serve_web.py --host 0.0.0.0 --port 8550
+```
+
+Then open `http://<tailscale-ip>:8550/` in Safari and use *Share -> Add to Home Screen*.
+The storage folder is the one set in the settings on the server, imports are uploaded to
+the server, and "open document" sends the file through `/files` (PDFs and images inline,
+everything else as a download into the Files app). There is no login - only devices in
+your tailnet can reach it. For a permanent install, run the script from a systemd unit:
+
+```ini
+[Unit]
+Description=UniDocs web
+After=network-online.target
+
+[Service]
+WorkingDirectory=/path/to/UniDocs
+ExecStart=/path/to/UniDocs/.venv/bin/python tools/serve_web.py
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
+```
 
 ## Releases (automated)
 
