@@ -26,6 +26,9 @@ dependencies = [
 # the browser only renders the Flet UI. See tools/serve_web.py.
 web = [
     "flet-web==0.84.0",
+    # flet-web 0.84 still passes openapi_prefix to FastAPI; newer FastAPI
+    # releases dropped it and the web server dies on startup.
+    "fastapi==0.136.0",
     "uvicorn[standard]>=0.35",
 ]
 
