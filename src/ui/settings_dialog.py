@@ -14,18 +14,22 @@ from ui.update_install import UpdateInstaller
 
 log = get_logger(__name__)
 
-# The settings body is a two-column layout. The columns must never get
-# narrower than the widest control in them - the System / Light / Dark switch -
-# because Flet would then squeeze the labels onto two lines. So the whole body
-# falls back to a single stacked column before that width is reached; below the
-# second breakpoint the switch drops its text labels so it fits even then.
-COLUMN_MIN_WIDTH = 374      # width the mode selector needs next to its icon
+# The settings body is a navigation list on the left plus one scrollable
+# panel on the right. The panel must never get narrower than the widest
+# control in it - the System / Light / Dark switch - because Flet would then
+# squeeze the labels onto two lines. Below the nav breakpoint the list
+# collapses into a dropdown above the panel; on very narrow windows the
+# switch drops its text labels so it fits even then.
+NAV_WIDTH = 176             # left navigation list
+NAV_PANEL_GAP = 48          # spacing + divider + padding next to the list
+NAV_BREAKPOINT = 640        # below this: nav list becomes a dropdown
 CONTENT_MAX_WIDTH = 780     # widest the dialog ever gets
-STACK_BREAKPOINT = 2 * COLUMN_MIN_WIDTH + 32   # = full dialog width
-COMPACT_BREAKPOINT = 400    # below this: mode selector drops its text labels
-
-CONTENT_MIN_WIDTH = 300
+CONTENT_MIN_WIDTH = 380
+CONTENT_MAX_HEIGHT = 560
+CONTENT_MIN_HEIGHT = 320
 CONTENT_SIDE_MARGIN = 72    # dialog padding + a little breathing room
+CONTENT_HEIGHT_MARGIN = 180 # title bar + dialog actions + window chrome
+COMPACT_BREAKPOINT = 400    # below this: mode selector drops its text labels
 
 class SettingsDialog(ft.AlertDialog):
     """
@@ -64,7 +68,9 @@ class SettingsDialog(ft.AlertDialog):
         self._theme = theme or ThemeManager(self._cfg)
         # Responsive body (see _build_content / _apply_layout).
         self._content_width = CONTENT_MAX_WIDTH
-        self._stacked = False
+        self._content_height = CONTENT_MAX_HEIGHT
+        self._nav_compact = False
+        self._selected_section = 0
         self._resize_hooked = False
         self._prev_resize_handler = None
         # Esc closes the dialog: while it is open this dialog owns the page
@@ -346,11 +352,19 @@ class SettingsDialog(ft.AlertDialog):
             self._webdav_group,
             self._gdrive_group,
             self._sync_status,
-            self._sync_on_start_switch,
-            self._sync_now_button,
+            ft.Row(
+                spacing=16,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                controls=[self._sync_on_start_switch, self._sync_now_button],
+            ),
             ft.Divider(height=1),
-            self._trash_auto_switch,
-            self._trash_days,
+            ft.Row(
+                spacing=16,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                controls=[self._trash_auto_switch, self._trash_days],
+            ),
         )
         self._apply_sync_visibility()
         self._apply_gdrive_visibility()
@@ -360,10 +374,9 @@ class SettingsDialog(ft.AlertDialog):
         # Flet fires this when the dialog closes for any reason - keep the
         # keyboard hook tidy even if we did not close it ourselves.
         self.on_dismiss = self._on_dismiss
-        # Let Material wrap title + content in a scroll view, so that on a short
-        # window the body scrolls instead of overflowing past the dialog (and
-        # the window) while the buttons stay visible.
-        self.scrollable = True
+        # The panel scrolls on its own; Material must not wrap the whole body
+        # in another scroll view, else the nav list would scroll away too.
+        self.scrollable = False
 
         self.title = ft.Row(
             spacing=8,
@@ -373,94 +386,173 @@ class SettingsDialog(ft.AlertDialog):
             ],
         )
 
-        # Left column: appearance + startup. Right column: updates + about.
-        self._left_column = ft.Column(
-            expand=True,
-            tight=True,
-            spacing=16,
-            controls=[
-                # UniDocs folder location
-                # TODO: auskommentiert, kommt spaeter wieder rein
-                # ft.Column(spacing=0, controls=[
-                #     ft.Text("UniDocs location", weight=ft.FontWeight.W_600),
-                #     ft.Row(controls=[self._path_field]),
-                #     self._status,
-                # ]),
-                #
-                # ft.Divider(height=1),
+        #  section panels - one per navigation entry
+        self._section_columns = [
+            # General: appearance + startup
+            ft.Column(
+                tight=True,
+                spacing=16,
+                controls=[
+                    # UniDocs folder location
+                    # TODO: auskommentiert, kommt spaeter wieder rein
+                    # ft.Column(spacing=0, controls=[
+                    #     ft.Text("UniDocs location", weight=ft.FontWeight.W_600),
+                    #     ft.Row(controls=[self._path_field]),
+                    #     self._status,
+                    # ]),
+                    #
+                    # ft.Divider(height=1),
 
-                # Appearance (theme palette + light/dark mode)
-                self._section(
-                    "Appearance",
-                    self._mode_selector,
-                    # The palette dropdown floats its label above the field,
-                    # so it needs extra room below the mode selector.
-                    ft.Container(height=12, bgcolor=ft.Colors.TRANSPARENT),
-                    self._palette_dropdown,
-                    ft.Text(
-                        "Changes apply instantly and are saved.",
-                        size=12,
-                        color=ft.Colors.ON_SURFACE_VARIANT,
+                    # Appearance (theme palette + light/dark mode)
+                    self._section(
+                        "Appearance",
+                        self._mode_selector,
+                        # The palette dropdown floats its label above the field,
+                        # so it needs extra room below the mode selector.
+                        ft.Container(height=12, bgcolor=ft.Colors.TRANSPARENT),
+                        self._palette_dropdown,
+                        ft.Text(
+                            "Changes apply instantly and are saved.",
+                            size=12,
+                            color=ft.Colors.ON_SURFACE_VARIANT,
+                        ),
                     ),
-                ),
 
                     ft.Divider(height=1),
 
-                # Startup (reopen group / module)
-                self._section(
-                    "Startup",
-                    self._restore_group_switch,
-                    self._restore_module_switch,
-                    ft.Text(
-                        "Off: the app always opens on Home.",
-                        size=12,
-                        color=ft.Colors.ON_SURFACE_VARIANT,
+                    # Startup (reopen group / module)
+                    self._section(
+                        "Startup",
+                        self._restore_group_switch,
+                        self._restore_module_switch,
+                        ft.Text(
+                            "Off: the app always opens on Home.",
+                            size=12,
+                            color=ft.Colors.ON_SURFACE_VARIANT,
+                        ),
                     ),
+                ],
+            ),
+            # Cloud sync + trash retention
+            ft.Column(
+                tight=True,
+                spacing=16,
+                controls=[self._sync_section],
+            ),
+            # Update check
+            ft.Column(
+                tight=True,
+                spacing=16,
+                controls=[
+                    self._section(
+                        "Updates",
+                        ft.Row(
+                            spacing=8,
+                            controls=[self._check_button, self._update_progress],
+                        ),
+                        self._update_status,
+                        self._update_actions,
+                        self._auto_patch_switch,
+                        self._auto_patch_note,
+                    ),
+                ],
+            ),
+            # About / links
+            ft.Column(
+                tight=True,
+                spacing=16,
+                controls=[
+                    self._section(
+                        "About",
+                        self._link_row("Source code", ft.Icons.CODE, REPO_URL),
+                        self._link_row("Releases", ft.Icons.NEW_RELEASES, RELEASES_URL),
+                        self._link_row("Changelog", ft.Icons.DESCRIPTION, CHANGELOG_URL),
+                        self._link_row(
+                            "Report an issue",
+                            ft.Icons.BUG_REPORT_OUTLINED,
+                            ISSUES_URL,
+                        ),
+                        ft.Text(
+                            f"Version {APP_VERSION}",
+                            size=12,
+                            color=ft.Colors.ON_SURFACE_VARIANT,
+                        ),
+                    ),
+                ],
+            ),
+        ]
+
+        # Only the first panel is visible; _show_section toggles the rest.
+        for index, panel in enumerate(self._section_columns):
+            panel.visible = index == 0
+
+        #  navigation (list on wide windows, dropdown on narrow ones)
+        nav_entries = [
+            ("General", ft.Icons.TUNE),
+            ("Cloud sync", ft.Icons.CLOUD_SYNC),
+            ("Updates", ft.Icons.SYSTEM_UPDATE_ALT),
+            ("About", ft.Icons.INFO_OUTLINE),
+        ]
+        self._nav_items = [
+            ft.ListTile(
+                leading=ft.Icon(icon, size=20),
+                title=ft.Text(label, size=14),
+                dense=True,
+                selected=index == 0,
+                selected_tile_color=ft.Colors.SECONDARY_CONTAINER,
+                on_click=lambda e, index=index: self._show_section(index),
+            )
+            for index, (label, icon) in enumerate(nav_entries)
+        ]
+        self._nav_dropdown = ft.Dropdown(
+            options=[
+                ft.dropdown.Option(key=str(index), text=label)
+                for index, (label, _icon) in enumerate(nav_entries)
+            ],
+            value="0",
+            on_select=self._on_nav_select,
+            visible=False,
+        )
+        self._nav_area = ft.Container(
+            width=NAV_WIDTH,
+            content=ft.Column(
+                width=NAV_WIDTH,
+                spacing=2,
+                tight=True,
+                controls=self._nav_items,
+            ),
+        )
+        self._vdiv = ft.Container(
+            width=1,
+            height=self._content_height,
+            bgcolor=ft.Colors.OUTLINE_VARIANT,
+        )
+        self._section_host = ft.Column(
+            tight=True,
+            spacing=0,
+            controls=self._section_columns,
+        )
+        self._content_pane = ft.Column(
+            expand=True,
+            spacing=16,
+            controls=[
+                self._nav_dropdown,
+                ft.Column(
+                    expand=True,
+                    scroll=ft.ScrollMode.AUTO,
+                    controls=[self._section_host],
                 ),
             ],
         )
-
-        self._right_column = ft.Column(
-            expand=True,
-            tight=True,
-            spacing=16,
-            controls=[
-                # Update check
-                self._section(
-                    "Updates",
-                    ft.Row(
-                        spacing=8,
-                        controls=[self._check_button, self._update_progress],
-                    ),
-                    self._update_status,
-                    self._update_actions,
-                    self._auto_patch_switch,
-                    self._auto_patch_note,
-                ),
-
-                    ft.Divider(height=1),
-
-                # Cloud sync + trash retention
-                self._sync_section,
-
-                    ft.Divider(height=1),
-
-                # About / links
-                self._section(
-                    "About",
-                    self._link_row("Source code", ft.Icons.CODE, REPO_URL),
-                    self._link_row("Releases", ft.Icons.NEW_RELEASES, RELEASES_URL),
-                    self._link_row("Changelog", ft.Icons.DESCRIPTION, CHANGELOG_URL),
-                    self._link_row("Report an issue", ft.Icons.BUG_REPORT_OUTLINED, ISSUES_URL),
-                    ft.Text(
-                        f"Version {APP_VERSION}",
-                        size=12,
-                        color=ft.Colors.ON_SURFACE_VARIANT,
-                    ),
-                ),
-            ],
+        self._body = ft.Container(
+            width=self._content_width,
+            height=self._content_height,
+            content=ft.Row(
+                spacing=24,
+                vertical_alignment=ft.CrossAxisAlignment.STRETCH,
+                controls=[self._nav_area, self._vdiv, self._content_pane],
+            ),
         )
-
         self.content = self._build_content()
 
         # Everything here applies instantly, so there is nothing to "Apply":
@@ -479,54 +571,76 @@ class SettingsDialog(ft.AlertDialog):
         # Bind the fallback manager (if enabled) to the live page.
         if not self._theme.attached:
             self._theme.attach(self.page)
-        # Re-layout whenever the window is resized: below the breakpoint the two
-        # columns stack into one (see _apply_layout).
+        # Re-layout whenever the window is resized: the nav list folds into a
+        # dropdown on narrow windows (see _apply_layout).
         self._hook_resize()
         self._apply_layout()
 
     #  responsive layout 
 
     def _build_content(self) -> ft.Container:
-        """Body of the dialog: two side-by-side columns, or one stacked column."""
-        # In a Row the columns share the available width; stacked they have to
-        # size to their own content instead.
-        self._left_column.expand = not self._stacked
-        self._right_column.expand = not self._stacked
-        if self._stacked:
-            body = ft.Column(
-                tight=True,
-                spacing=24,
-                controls=[self._left_column, self._right_column],
-            )
-        else:
-            body = ft.Row(
-                spacing=32,
-                vertical_alignment=ft.CrossAxisAlignment.START,
-                controls=[self._left_column, self._right_column],
-            )
-        return ft.Container(width=self._content_width, content=body)
+        """Body of the dialog: navigation list plus one scrollable panel."""
+        return self._body
+
+    def _show_section(self, index: int) -> None:
+        """Switch the panel to `index` and sync nav list + dropdown."""
+        if not 0 <= index < len(self._section_columns):
+            return
+        self._selected_section = index
+        # All panels stay mounted; hiding is cheaper than swapping children
+        # (and a detached control must not be re-attached later).
+        for i, panel in enumerate(self._section_columns):
+            panel.visible = i == index
+        self._nav_dropdown.value = str(index)
+        for i, tile in enumerate(self._nav_items):
+            tile.selected = i == index
+        self.update()
+
+    def _on_nav_select(self, e) -> None:
+        try:
+            index = int(self._nav_dropdown.value or 0)
+        except ValueError:
+            index = 0
+        self._show_section(index)
 
     def _apply_layout(self) -> None:
-        """Fit the body to the current window width (called on mount + resize)."""
+        """Fit the body to the current window (called on mount + resize)."""
         page = self.page
         if page is None or not self._resize_hooked:
             return
         page_width = page.width or CONTENT_MAX_WIDTH
+        page_height = page.height or 900
         width = int(
             max(CONTENT_MIN_WIDTH,
                 min(CONTENT_MAX_WIDTH, page_width - CONTENT_SIDE_MARGIN))
         )
-        stacked = width < STACK_BREAKPOINT
-        compact = width < COMPACT_BREAKPOINT
-        if (width, stacked, compact) == (
-            self._content_width, self._stacked, self._compact_segments
+        height = int(
+            max(CONTENT_MIN_HEIGHT,
+                min(CONTENT_MAX_HEIGHT, page_height - CONTENT_HEIGHT_MARGIN))
+        )
+        nav_compact = width < NAV_BREAKPOINT
+        panel_width = width if nav_compact else width - NAV_WIDTH - NAV_PANEL_GAP
+        compact = panel_width < COMPACT_BREAKPOINT
+        if (width, height, nav_compact, compact) == (
+            self._content_width, self._content_height,
+            self._nav_compact, self._compact_segments,
         ):
             return
         self._content_width = width
-        self._stacked = stacked
+        self._content_height = height
+        self._nav_compact = nav_compact
         self._apply_compact_segments(compact)
-        self.content = self._build_content()
+        self._apply_nav_mode(nav_compact)
+        self._body.width = width
+        self._body.height = height
+        self._vdiv.height = height
         self.update()
+
+    def _apply_nav_mode(self, compact: bool) -> None:
+        """Wide: list on the left. Narrow: dropdown above the panel."""
+        self._nav_area.visible = not compact
+        self._vdiv.visible = not compact
+        self._nav_dropdown.visible = compact
 
     def _apply_compact_segments(self, compact: bool) -> None:
         """Drop the mode labels on very narrow windows so the segments fit."""
