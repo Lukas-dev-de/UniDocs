@@ -1,6 +1,6 @@
 [project]
 name = "unidocs"
-version = "2.5.0" # keep in sync with src/app_info.py and CHANGELOG.md - see tools/check_version.py
+version = "2.6.0" # keep in sync with src/app_info.py and CHANGELOG.md - see tools/check_version.py
 description = "Document management and productivity application"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -19,6 +19,11 @@ dependencies = [
     "flet-audio==0.84.0",
     "watchdog>=6.0.0",
     "platformdirs>=4.9.6",
+    "keyring>=24.0.0",
+    "webdav4>=0.10.0",
+    "google-api-python-client>=2.100.0",
+    "google-auth>=2.23.0",
+    "google-auth-oauthlib>=1.1.0",
 ]
 
 [project.optional-dependencies]

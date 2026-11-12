@@ -3,25 +3,33 @@ from pathlib import Path
 from app_info import APP_VERSION, CHANGELOG_URL, ISSUES_URL, REPO_URL, RELEASES_URL
 from app_storage.module_store import ModuleStore
 from app_storage.app_config import AppConfig
+from app_storage.secrets_store import SecretsStore
 from app_logging import get_logger
 import updater
+from sync.gdrive import TOKEN_KEY, resolve_client_secret
+from sync.service import webdav_password_key
+from sync.webdav import WebDAVProvider
 from ui.theme import MODE_LABELS, PALETTES, ThemeManager
 from ui.update_install import UpdateInstaller
 
 log = get_logger(__name__)
 
-# The settings body is a two-column layout. The columns must never get
-# narrower than the widest control in them - the System / Light / Dark switch -
-# because Flet would then squeeze the labels onto two lines. So the whole body
-# falls back to a single stacked column before that width is reached; below the
-# second breakpoint the switch drops its text labels so it fits even then.
-COLUMN_MIN_WIDTH = 374      # width the mode selector needs next to its icon
+# The settings body is a navigation list on the left plus one scrollable
+# panel on the right. The panel must never get narrower than the widest
+# control in it - the System / Light / Dark switch - because Flet would then
+# squeeze the labels onto two lines. Below the nav breakpoint the list
+# collapses into a dropdown above the panel; on very narrow windows the
+# switch drops its text labels so it fits even then.
+NAV_WIDTH = 176             # left navigation list
+NAV_PANEL_GAP = 48          # spacing + divider + padding next to the list
+NAV_BREAKPOINT = 640        # below this: nav list becomes a dropdown
 CONTENT_MAX_WIDTH = 780     # widest the dialog ever gets
-STACK_BREAKPOINT = 2 * COLUMN_MIN_WIDTH + 32   # = full dialog width
-COMPACT_BREAKPOINT = 400    # below this: mode selector drops its text labels
-
-CONTENT_MIN_WIDTH = 300
+CONTENT_MIN_WIDTH = 380
+CONTENT_MAX_HEIGHT = 560
+CONTENT_MIN_HEIGHT = 320
 CONTENT_SIDE_MARGIN = 72    # dialog padding + a little breathing room
+CONTENT_HEIGHT_MARGIN = 180 # title bar + dialog actions + window chrome
+COMPACT_BREAKPOINT = 400    # below this: mode selector drops its text labels
 
 class SettingsDialog(ft.AlertDialog):
     """
@@ -42,17 +50,27 @@ class SettingsDialog(ft.AlertDialog):
             The caller is responsible for reloading the store / sidebar.
     """
 
-    def __init__(self, store: ModuleStore, on_location_change=None, theme: ThemeManager | None = None):
+    def __init__(
+        self,
+        store: ModuleStore,
+        on_location_change=None,
+        theme: ThemeManager | None = None,
+        sync_service=None,
+    ):
         super().__init__()
         self._store = store
         self._cfg = AppConfig()
         self._on_location_change = on_location_change
+        self._sync_service = sync_service
+        self._secrets = SecretsStore()
         # Shared with main.py when available; otherwise a local fallback is
         # created and attached once this dialog mounts.
         self._theme = theme or ThemeManager(self._cfg)
         # Responsive body (see _build_content / _apply_layout).
         self._content_width = CONTENT_MAX_WIDTH
-        self._stacked = False
+        self._content_height = CONTENT_MAX_HEIGHT
+        self._nav_compact = False
+        self._selected_section = 0
         self._resize_hooked = False
         self._prev_resize_handler = None
         # Esc closes the dialog: while it is open this dialog owns the page
@@ -192,15 +210,173 @@ class SettingsDialog(ft.AlertDialog):
             disabled=not self._cfg.restore_group,
         )
 
-        #  LAYOUT 
+        #  cloud sync controls
+        self._sync_provider = ft.Dropdown(
+            label="Cloud sync",
+            value=self._cfg.sync_provider,
+            options=[
+                ft.dropdown.Option(key="off", text="Off (local only)"),
+                ft.dropdown.Option(key="webdav", text="Nextcloud / WebDAV"),
+                ft.dropdown.Option(key="gdrive", text="Google Drive"),
+            ],
+            on_select=self._on_sync_provider_change,
+            expand=True,
+        )
+        self._webdav_url = ft.TextField(
+            label="Server URL",
+            value=self._cfg.webdav_url,
+            hint_text="https://cloud.example.com/remote.php/dav/files/user",
+            dense=True,
+        )
+        self._webdav_user = ft.TextField(
+            label="Username",
+            value=self._cfg.webdav_username,
+            dense=True,
+        )
+        self._webdav_password = ft.TextField(
+            label="App password",
+            hint_text="Leave empty to keep the saved password",
+            password=True,
+            can_reveal_password=True,
+            dense=True,
+        )
+        self._webdav_root = ft.TextField(
+            label="Remote folder",
+            value=self._cfg.webdav_root,
+            dense=True,
+        )
+        self._webdav_save = ft.FilledButton(
+            "Save & test",
+            icon=ft.Icons.CLOUD_DONE_OUTLINED,
+            on_click=self._save_webdav,
+        )
+        self._sync_progress = ft.ProgressRing(
+            width=16, height=16, stroke_width=2, visible=False
+        )
+        self._sync_status = ft.Text(
+            "", size=12, color=ft.Colors.ON_SURFACE_VARIANT
+        )
+        self._webdav_group = ft.Column(
+            spacing=6,
+            tight=True,
+            controls=[
+                self._webdav_url,
+                self._webdav_user,
+                self._webdav_password,
+                self._webdav_root,
+                ft.Row(
+                    spacing=8,
+                    controls=[self._webdav_save, self._sync_progress],
+                ),
+            ],
+        )
+
+        self._gdrive_secret_path = ft.TextField(
+            label="OAuth client_secret.json",
+            value=self._cfg.gdrive_client_secret_path,
+            hint_text="Your own Google Cloud desktop client",
+            dense=True,
+            expand=True,
+        )
+        self._gdrive_browse = ft.IconButton(
+            icon=ft.Icons.FOLDER_OPEN,
+            tooltip="Choose client_secret.json",
+            on_click=self._pick_client_secret,
+        )
+        self._gdrive_connect = ft.FilledButton(
+            "Connect & sync",
+            icon=ft.Icons.LOGIN,
+            on_click=self._google_connect,
+        )
+        self._gdrive_disconnect = ft.TextButton(
+            "Disconnect",
+            icon=ft.Icons.LOGOUT,
+            on_click=self._google_disconnect,
+        )
+        self._gdrive_secret_row = ft.Row(
+            spacing=4,
+            controls=[self._gdrive_secret_path, self._gdrive_browse],
+        )
+        self._gdrive_managed_note = ft.Text(
+            "This build includes the Google app registration. Click Connect & sync "
+            "and sign in with your own Google account; files stay in your Drive.",
+            size=12,
+            color=ft.Colors.ON_SURFACE_VARIANT,
+        )
+        self._gdrive_group = ft.Column(
+            spacing=6,
+            tight=True,
+            controls=[
+                ft.Text("Google Drive", weight=ft.FontWeight.W_600),
+                self._gdrive_managed_note,
+                self._gdrive_secret_row,
+                ft.Row(
+                    spacing=8,
+                    controls=[self._gdrive_connect, self._gdrive_disconnect],
+                ),
+                ft.Text(
+                    "The app only sees files it created itself (drive.file scope).",
+                    size=12,
+                    color=ft.Colors.ON_SURFACE_VARIANT,
+                ),
+            ],
+        )
+
+        self._sync_on_start_switch = ft.Switch(
+            label="Sync on startup",
+            value=self._cfg.sync_on_start,
+            on_change=self._on_sync_on_start_change,
+        )
+        self._sync_now_button = ft.FilledButton(
+            "Sync now",
+            icon=ft.Icons.CLOUD_SYNC,
+            on_click=self._sync_now,
+        )
+        self._trash_auto_switch = ft.Switch(
+            label="Empty trash automatically",
+            value=self._cfg.trash_auto_empty_enabled,
+            on_change=self._on_trash_auto_change,
+        )
+        self._trash_days = ft.TextField(
+            label="Keep trash for (days)",
+            value=str(self._cfg.trash_retention_days),
+            width=150,
+            dense=True,
+            disabled=not self._cfg.trash_auto_empty_enabled,
+            on_blur=self._on_trash_days_change,
+            on_submit=self._on_trash_days_change,
+        )
+        self._sync_section = self._section(
+            "Cloud sync",
+            self._sync_provider,
+            self._webdav_group,
+            self._gdrive_group,
+            self._sync_status,
+            ft.Row(
+                spacing=16,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                controls=[self._sync_on_start_switch, self._sync_now_button],
+            ),
+            ft.Divider(height=1),
+            ft.Row(
+                spacing=16,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                controls=[self._trash_auto_switch, self._trash_days],
+            ),
+        )
+        self._apply_sync_visibility()
+        self._apply_gdrive_visibility()
+
+        #  LAYOUT
         self.modal = True
         # Flet fires this when the dialog closes for any reason - keep the
         # keyboard hook tidy even if we did not close it ourselves.
         self.on_dismiss = self._on_dismiss
-        # Let Material wrap title + content in a scroll view, so that on a short
-        # window the body scrolls instead of overflowing past the dialog (and
-        # the window) while the buttons stay visible.
-        self.scrollable = True
+        # The panel scrolls on its own; Material must not wrap the whole body
+        # in another scroll view, else the nav list would scroll away too.
+        self.scrollable = False
 
         self.title = ft.Row(
             spacing=8,
@@ -210,89 +386,173 @@ class SettingsDialog(ft.AlertDialog):
             ],
         )
 
-        # Left column: appearance + startup. Right column: updates + about.
-        self._left_column = ft.Column(
-            expand=True,
-            tight=True,
-            spacing=16,
-            controls=[
-                # UniDocs folder location
-                # TODO: auskommentiert, kommt spaeter wieder rein
-                # ft.Column(spacing=0, controls=[
-                #     ft.Text("UniDocs location", weight=ft.FontWeight.W_600),
-                #     ft.Row(controls=[self._path_field]),
-                #     self._status,
-                # ]),
-                #
-                # ft.Divider(height=1),
+        #  section panels - one per navigation entry
+        self._section_columns = [
+            # General: appearance + startup
+            ft.Column(
+                tight=True,
+                spacing=16,
+                controls=[
+                    # UniDocs folder location
+                    # TODO: auskommentiert, kommt spaeter wieder rein
+                    # ft.Column(spacing=0, controls=[
+                    #     ft.Text("UniDocs location", weight=ft.FontWeight.W_600),
+                    #     ft.Row(controls=[self._path_field]),
+                    #     self._status,
+                    # ]),
+                    #
+                    # ft.Divider(height=1),
 
-                # Appearance (theme palette + light/dark mode)
-                self._section(
-                    "Appearance",
-                    self._mode_selector,
-                    # The palette dropdown floats its label above the field,
-                    # so it needs extra room below the mode selector.
-                    ft.Container(height=12, bgcolor=ft.Colors.TRANSPARENT),
-                    self._palette_dropdown,
-                    ft.Text(
-                        "Changes apply instantly and are saved.",
-                        size=12,
-                        color=ft.Colors.ON_SURFACE_VARIANT,
+                    # Appearance (theme palette + light/dark mode)
+                    self._section(
+                        "Appearance",
+                        self._mode_selector,
+                        # The palette dropdown floats its label above the field,
+                        # so it needs extra room below the mode selector.
+                        ft.Container(height=12, bgcolor=ft.Colors.TRANSPARENT),
+                        self._palette_dropdown,
+                        ft.Text(
+                            "Changes apply instantly and are saved.",
+                            size=12,
+                            color=ft.Colors.ON_SURFACE_VARIANT,
+                        ),
                     ),
-                ),
 
                     ft.Divider(height=1),
 
-                # Startup (reopen group / module)
-                self._section(
-                    "Startup",
-                    self._restore_group_switch,
-                    self._restore_module_switch,
-                    ft.Text(
-                        "Off: the app always opens on Home.",
-                        size=12,
-                        color=ft.Colors.ON_SURFACE_VARIANT,
+                    # Startup (reopen group / module)
+                    self._section(
+                        "Startup",
+                        self._restore_group_switch,
+                        self._restore_module_switch,
+                        ft.Text(
+                            "Off: the app always opens on Home.",
+                            size=12,
+                            color=ft.Colors.ON_SURFACE_VARIANT,
+                        ),
                     ),
-                ),
-            ],
-        )
+                ],
+            ),
+            # Cloud sync + trash retention
+            ft.Column(
+                tight=True,
+                spacing=16,
+                controls=[self._sync_section],
+            ),
+            # Update check
+            ft.Column(
+                tight=True,
+                spacing=16,
+                controls=[
+                    self._section(
+                        "Updates",
+                        ft.Row(
+                            spacing=8,
+                            controls=[self._check_button, self._update_progress],
+                        ),
+                        self._update_status,
+                        self._update_actions,
+                        self._auto_patch_switch,
+                        self._auto_patch_note,
+                    ),
+                ],
+            ),
+            # About / links
+            ft.Column(
+                tight=True,
+                spacing=16,
+                controls=[
+                    self._section(
+                        "About",
+                        self._link_row("Source code", ft.Icons.CODE, REPO_URL),
+                        self._link_row("Releases", ft.Icons.NEW_RELEASES, RELEASES_URL),
+                        self._link_row("Changelog", ft.Icons.DESCRIPTION, CHANGELOG_URL),
+                        self._link_row(
+                            "Report an issue",
+                            ft.Icons.BUG_REPORT_OUTLINED,
+                            ISSUES_URL,
+                        ),
+                        ft.Text(
+                            f"Version {APP_VERSION}",
+                            size=12,
+                            color=ft.Colors.ON_SURFACE_VARIANT,
+                        ),
+                    ),
+                ],
+            ),
+        ]
 
-        self._right_column = ft.Column(
-            expand=True,
+        # Only the first panel is visible; _show_section toggles the rest.
+        for index, panel in enumerate(self._section_columns):
+            panel.visible = index == 0
+
+        #  navigation (list on wide windows, dropdown on narrow ones)
+        nav_entries = [
+            ("General", ft.Icons.TUNE),
+            ("Cloud sync", ft.Icons.CLOUD_SYNC),
+            ("Updates", ft.Icons.SYSTEM_UPDATE_ALT),
+            ("About", ft.Icons.INFO_OUTLINE),
+        ]
+        self._nav_items = [
+            ft.ListTile(
+                leading=ft.Icon(icon, size=20),
+                title=ft.Text(label, size=14),
+                dense=True,
+                selected=index == 0,
+                selected_tile_color=ft.Colors.SECONDARY_CONTAINER,
+                on_click=lambda e, index=index: self._show_section(index),
+            )
+            for index, (label, icon) in enumerate(nav_entries)
+        ]
+        self._nav_dropdown = ft.Dropdown(
+            options=[
+                ft.dropdown.Option(key=str(index), text=label)
+                for index, (label, _icon) in enumerate(nav_entries)
+            ],
+            value="0",
+            on_select=self._on_nav_select,
+            visible=False,
+        )
+        self._nav_area = ft.Container(
+            width=NAV_WIDTH,
+            content=ft.Column(
+                width=NAV_WIDTH,
+                spacing=2,
+                tight=True,
+                controls=self._nav_items,
+            ),
+        )
+        self._vdiv = ft.Container(
+            width=1,
+            height=self._content_height,
+            bgcolor=ft.Colors.OUTLINE_VARIANT,
+        )
+        self._section_host = ft.Column(
             tight=True,
+            spacing=0,
+            controls=self._section_columns,
+        )
+        self._content_pane = ft.Column(
+            expand=True,
             spacing=16,
             controls=[
-                # Update check
-                self._section(
-                    "Updates",
-                    ft.Row(
-                        spacing=8,
-                        controls=[self._check_button, self._update_progress],
-                    ),
-                    self._update_status,
-                    self._update_actions,
-                    self._auto_patch_switch,
-                    self._auto_patch_note,
-                ),
-
-                    ft.Divider(height=1),
-
-                # About / links
-                self._section(
-                    "About",
-                    self._link_row("Source code", ft.Icons.CODE, REPO_URL),
-                    self._link_row("Releases", ft.Icons.NEW_RELEASES, RELEASES_URL),
-                    self._link_row("Changelog", ft.Icons.DESCRIPTION, CHANGELOG_URL),
-                    self._link_row("Report an issue", ft.Icons.BUG_REPORT_OUTLINED, ISSUES_URL),
-                    ft.Text(
-                        f"Version {APP_VERSION}",
-                        size=12,
-                        color=ft.Colors.ON_SURFACE_VARIANT,
-                    ),
+                self._nav_dropdown,
+                ft.Column(
+                    expand=True,
+                    scroll=ft.ScrollMode.AUTO,
+                    controls=[self._section_host],
                 ),
             ],
         )
-
+        self._body = ft.Container(
+            width=self._content_width,
+            height=self._content_height,
+            content=ft.Row(
+                spacing=24,
+                vertical_alignment=ft.CrossAxisAlignment.STRETCH,
+                controls=[self._nav_area, self._vdiv, self._content_pane],
+            ),
+        )
         self.content = self._build_content()
 
         # Everything here applies instantly, so there is nothing to "Apply":
@@ -311,54 +571,76 @@ class SettingsDialog(ft.AlertDialog):
         # Bind the fallback manager (if enabled) to the live page.
         if not self._theme.attached:
             self._theme.attach(self.page)
-        # Re-layout whenever the window is resized: below the breakpoint the two
-        # columns stack into one (see _apply_layout).
+        # Re-layout whenever the window is resized: the nav list folds into a
+        # dropdown on narrow windows (see _apply_layout).
         self._hook_resize()
         self._apply_layout()
 
     #  responsive layout 
 
     def _build_content(self) -> ft.Container:
-        """Body of the dialog: two side-by-side columns, or one stacked column."""
-        # In a Row the columns share the available width; stacked they have to
-        # size to their own content instead.
-        self._left_column.expand = not self._stacked
-        self._right_column.expand = not self._stacked
-        if self._stacked:
-            body = ft.Column(
-                tight=True,
-                spacing=24,
-                controls=[self._left_column, self._right_column],
-            )
-        else:
-            body = ft.Row(
-                spacing=32,
-                vertical_alignment=ft.CrossAxisAlignment.START,
-                controls=[self._left_column, self._right_column],
-            )
-        return ft.Container(width=self._content_width, content=body)
+        """Body of the dialog: navigation list plus one scrollable panel."""
+        return self._body
+
+    def _show_section(self, index: int) -> None:
+        """Switch the panel to `index` and sync nav list + dropdown."""
+        if not 0 <= index < len(self._section_columns):
+            return
+        self._selected_section = index
+        # All panels stay mounted; hiding is cheaper than swapping children
+        # (and a detached control must not be re-attached later).
+        for i, panel in enumerate(self._section_columns):
+            panel.visible = i == index
+        self._nav_dropdown.value = str(index)
+        for i, tile in enumerate(self._nav_items):
+            tile.selected = i == index
+        self.update()
+
+    def _on_nav_select(self, e) -> None:
+        try:
+            index = int(self._nav_dropdown.value or 0)
+        except ValueError:
+            index = 0
+        self._show_section(index)
 
     def _apply_layout(self) -> None:
-        """Fit the body to the current window width (called on mount + resize)."""
+        """Fit the body to the current window (called on mount + resize)."""
         page = self.page
         if page is None or not self._resize_hooked:
             return
         page_width = page.width or CONTENT_MAX_WIDTH
+        page_height = page.height or 900
         width = int(
             max(CONTENT_MIN_WIDTH,
                 min(CONTENT_MAX_WIDTH, page_width - CONTENT_SIDE_MARGIN))
         )
-        stacked = width < STACK_BREAKPOINT
-        compact = width < COMPACT_BREAKPOINT
-        if (width, stacked, compact) == (
-            self._content_width, self._stacked, self._compact_segments
+        height = int(
+            max(CONTENT_MIN_HEIGHT,
+                min(CONTENT_MAX_HEIGHT, page_height - CONTENT_HEIGHT_MARGIN))
+        )
+        nav_compact = width < NAV_BREAKPOINT
+        panel_width = width if nav_compact else width - NAV_WIDTH - NAV_PANEL_GAP
+        compact = panel_width < COMPACT_BREAKPOINT
+        if (width, height, nav_compact, compact) == (
+            self._content_width, self._content_height,
+            self._nav_compact, self._compact_segments,
         ):
             return
         self._content_width = width
-        self._stacked = stacked
+        self._content_height = height
+        self._nav_compact = nav_compact
         self._apply_compact_segments(compact)
-        self.content = self._build_content()
+        self._apply_nav_mode(nav_compact)
+        self._body.width = width
+        self._body.height = height
+        self._vdiv.height = height
         self.update()
+
+    def _apply_nav_mode(self, compact: bool) -> None:
+        """Wide: list on the left. Narrow: dropdown above the panel."""
+        self._nav_area.visible = not compact
+        self._vdiv.visible = not compact
+        self._nav_dropdown.visible = compact
 
     def _apply_compact_segments(self, compact: bool) -> None:
         """Drop the mode labels on very narrow windows so the segments fit."""
@@ -434,7 +716,187 @@ class SettingsDialog(ft.AlertDialog):
             self._cfg.restore_module and self._cfg.restore_group
         )
 
-    #  public 
+    #  cloud sync helpers
+
+    def _apply_sync_visibility(self) -> None:
+        provider = self._cfg.sync_provider
+        self._webdav_group.visible = provider == "webdav"
+        # Offer the one-click Google login also while sync is off.
+        self._gdrive_group.visible = provider in ("off", "gdrive")
+        self._sync_now_button.disabled = provider == "off"
+        self._trash_days.disabled = not self._cfg.trash_auto_empty_enabled
+
+    def _apply_gdrive_visibility(self) -> None:
+        managed = bool(resolve_client_secret(self._cfg.gdrive_client_secret_path))
+        self._gdrive_managed_note.visible = managed
+        self._gdrive_secret_row.visible = not managed
+
+    def _sync_sync_controls(self) -> None:
+        self._sync_provider.value = self._cfg.sync_provider
+        self._webdav_url.value = self._cfg.webdav_url
+        self._webdav_user.value = self._cfg.webdav_username
+        self._webdav_password.value = ""
+        self._webdav_root.value = self._cfg.webdav_root
+        self._gdrive_secret_path.value = self._cfg.gdrive_client_secret_path
+        self._sync_on_start_switch.value = self._cfg.sync_on_start
+        self._trash_auto_switch.value = self._cfg.trash_auto_empty_enabled
+        self._trash_days.value = str(self._cfg.trash_retention_days)
+        self._sync_status.value = ""
+        self._sync_progress.visible = False
+        self._apply_sync_visibility()
+        self._apply_gdrive_visibility()
+
+    def _on_sync_provider_change(self, e) -> None:
+        self._cfg.sync_provider = self._sync_provider.value or "off"
+        self._apply_sync_visibility()
+        self._sync_status.value = ""
+        self.update()
+
+    def _on_sync_on_start_change(self, e) -> None:
+        self._cfg.sync_on_start = bool(self._sync_on_start_switch.value)
+
+    def _on_trash_auto_change(self, e) -> None:
+        self._cfg.trash_auto_empty_enabled = bool(self._trash_auto_switch.value)
+        self._trash_days.disabled = not self._cfg.trash_auto_empty_enabled
+        self.update()
+
+    def _on_trash_days_change(self, e) -> None:
+        try:
+            days = int((self._trash_days.value or "").strip())
+        except ValueError:
+            days = self._cfg.trash_retention_days
+        self._cfg.trash_retention_days = days
+        self._trash_days.value = str(self._cfg.trash_retention_days)
+        self.update()
+
+    def _save_webdav(self, e) -> None:
+        url = (self._webdav_url.value or "").strip()
+        user = (self._webdav_user.value or "").strip()
+        root = (self._webdav_root.value or "UniDocs").strip() or "UniDocs"
+        password = self._webdav_password.value or ""
+        self._cfg.webdav_url = url
+        self._cfg.webdav_username = user
+        self._cfg.webdav_root = root
+        self._set_sync_busy(True, "Connecting…")
+        page = self.page
+        if page is None:
+            return
+        page.run_thread(lambda: self._test_webdav_worker(url, user, password, root))
+
+    def _test_webdav_worker(self, url, user, password, root) -> None:
+        error = None
+        try:
+            if not url:
+                raise ValueError("Server URL is missing")
+            if password:
+                self._secrets.set_secret(webdav_password_key(url, user), password)
+            else:
+                password = self._secrets.get_secret(webdav_password_key(url, user)) or ""
+                if not password:
+                    raise ValueError("App password is missing")
+            provider = WebDAVProvider(url, user, password, remote_root=root)
+            try:
+                provider.test_connection()
+            finally:
+                provider.close()
+        except Exception as ex:
+            error = str(ex)
+        page = self.page
+        if page is not None:
+            page.run_task(self._show_webdav_result, error)
+
+    async def _show_webdav_result(self, error) -> None:
+        self._set_sync_busy(False)
+        if error:
+            self._set_sync_status(f"Error: {error}", error=True)
+        else:
+            self._set_sync_status("Connection successful.")
+        self.update()
+
+    def _set_sync_busy(self, busy: bool, message: str = "") -> None:
+        self._webdav_save.disabled = busy
+        self._sync_progress.visible = busy
+        if message:
+            self._set_sync_status(message)
+
+    def _set_sync_status(self, message: str, *, error: bool = False) -> None:
+        self._sync_status.value = message
+        self._sync_status.color = (
+            ft.Colors.ERROR if error else ft.Colors.ON_SURFACE_VARIANT
+        )
+
+    async def _pick_client_secret(self, e) -> None:
+        files = await ft.FilePicker().pick_files(
+            allow_multiple=False,
+            allowed_extensions=["json"],
+            dialog_title="Google client_secret.json",
+        )
+        if files:
+            path = getattr(files[0], "path", "") or ""
+            if path:
+                self._gdrive_secret_path.value = path
+                self._cfg.gdrive_client_secret_path = path
+                self.update()
+
+    def _google_connect(self, e) -> None:
+        path = (self._gdrive_secret_path.value or "").strip()
+        self._cfg.gdrive_client_secret_path = path
+        self._cfg.sync_provider = "gdrive"
+        self._sync_provider.value = "gdrive"
+        self._apply_sync_visibility()
+        if not resolve_client_secret(path):
+            self._set_sync_status(
+                "This build has no Google client. Select client_secret.json first.",
+                error=True,
+            )
+            self.update()
+            return
+        if self._sync_service is None:
+            self._set_sync_status("Sync service is not available.", error=True)
+            self.update()
+            return
+        if not self._sync_service.start(interactive=True):
+            self._set_sync_status("A sync is already running or the provider is off.", error=True)
+        else:
+            # Connected once, then keep syncing on every start. The switch
+            # stays visible so the user can turn it off again.
+            self._cfg.sync_on_start = True
+            self._sync_on_start_switch.value = True
+            self._set_sync_status("Google login in the browser…")
+        self.update()
+
+    def _google_disconnect(self, e) -> None:
+        page = self.page
+        if page is None:
+            return
+        page.run_thread(self._google_disconnect_worker)
+
+    def _google_disconnect_worker(self) -> None:
+        try:
+            self._secrets.delete_secret(TOKEN_KEY)
+            message = "Google Drive disconnected."
+        except Exception as ex:
+            message = f"Disconnect failed: {ex}"
+        page = self.page
+        if page is not None:
+            page.run_task(self._show_sync_message, message)
+
+    async def _show_sync_message(self, message: str) -> None:
+        self._set_sync_status(message)
+        self.update()
+
+    def _sync_now(self, e) -> None:
+        if self._sync_service is None:
+            self._set_sync_status("Sync service is not available.", error=True)
+            self.update()
+            return
+        if not self._sync_service.start():
+            self._set_sync_status("A sync is already running or the provider is off.", error=True)
+        else:
+            self._set_sync_status("Sync started…")
+        self.update()
+
+    #  public
 
     def show(self) -> None:
         """Open the dialog, re-syncing the appearance controls first."""
@@ -442,9 +904,11 @@ class SettingsDialog(ft.AlertDialog):
         # back (see _unhook_resize), and did_mount does not fire again.
         self._hook_resize()
         self._apply_layout()
+        self._cfg.reload()
         self._sync_mode_selector()
         self._sync_palette_dropdown()
         self._sync_startup_switches()
+        self._sync_sync_controls()
         self._status.value = ""
         self._reset_update_section()
         self._install_key_handler()

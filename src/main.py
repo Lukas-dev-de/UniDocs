@@ -7,6 +7,7 @@ from ui.theme import ThemeManager
 from ui.update_prompt import StartupUpdateCheck
 from app_storage.module_store import ModuleStore
 from app_storage.app_config import AppConfig
+from sync.service import SyncService
 
 log = get_logger(__name__)
 
@@ -17,12 +18,18 @@ def main(page: ft.Page):
     log.info("UniDocs starting")
 
     cfg = AppConfig()
-    store = ModuleStore(root=cfg.unidocs_location)
+    store = ModuleStore(
+        root=cfg.unidocs_location,
+        device_id=cfg.device_id,
+        device_name=cfg.device_name,
+    )
+    sync_service = SyncService(page, cfg, store)
 
     # Release the filesystem watcher when the window closes. Its observer
     # thread is a daemon, so the process would exit anyway - this just closes
     # the inotify / FSEvents handle instead of leaving it to the OS.
     def _on_close(e):
+        sync_service.shutdown()
         store.stop_watching()
         log.debug("window closed, filesystem watcher stopped")
 
@@ -74,6 +81,19 @@ def main(page: ft.Page):
         if shown is not None and shown.id == module.id:
             module_card.set_module(module)
 
+    def refresh_after_external_change():
+        """Sync/trash changed files: reload sidebar and the visible detail pane."""
+        sidebar._reload_and_update()
+        shown = module_card.module
+        if module_card.visible and shown is not None:
+            match = next((m for m in store.load_all() if m.id == shown.id), None)
+            if match is not None:
+                module_card.set_module(match)
+            else:
+                show_group_home(sidebar.active_group)
+        else:
+            group_home.set_group(sidebar.active_group)
+
     page.title = "UniDocs"
     sidebar = ModuleSidebar(
         store=store,
@@ -81,6 +101,8 @@ def main(page: ft.Page):
         on_module_select=show_module,
         on_module_update=on_module_update,
         on_group_select=show_group_home,
+        sync_service=sync_service,
+        on_sync_finished=refresh_after_external_change,
     )
     # A rename on the home page has to move the sidebar's active group with it.
     group_home.on_group_renamed = sidebar.on_group_renamed
@@ -106,6 +128,9 @@ def main(page: ft.Page):
     # Reopen the group / module from the previous session (see Settings >
     # Startup). Runs after the controls are mounted so the detail view exists.
     sidebar.restore_session()
+
+    if cfg.sync_on_start and cfg.sync_provider != "off":
+        sync_service.start()
 
     # Asks GitHub in the background: silent for patch releases, at most one popup
     # per version otherwise (see ui.update_prompt).

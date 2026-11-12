@@ -142,16 +142,23 @@ with tempfile.TemporaryDirectory() as tmp:
     )
     pack("UpdatePrompt (no asset)", UpdatePrompt(release, None))
 
-    # Responsive settings body: two columns when there is room, one stacked
-    # column when the window is narrow, and icon-only mode segments on top of
-    # that. Pure structure, so it can be checked without a page.
+    # Responsive settings body: the nav folds from a left-hand list into a
+    # dropdown above the panel on narrow windows, and the mode segments drop
+    # their labels when even that is too narrow. Pure structure, so it can be
+    # checked without a page.
     print("settings layout modes:")
-    dialog._stacked = True
-    pack("settings body (stacked)", dialog._build_content())
-    assert dialog._left_column.expand is False, "stacked column must not expand"
-    dialog._stacked = False
-    pack("settings body (two columns)", dialog._build_content())
-    assert dialog._left_column.expand is True, "row column must expand"
+    assert dialog._build_content() is dialog._body
+    pack("settings body", dialog._body)
+    dialog._apply_nav_mode(False)
+    assert dialog._nav_area.visible is True, "wide nav list hidden"
+    assert dialog._vdiv.visible is True, "wide divider hidden"
+    assert dialog._nav_dropdown.visible is False, "wide dropdown shown"
+    pack("settings nav (wide)", dialog._nav_area)
+    dialog._apply_nav_mode(True)
+    assert dialog._nav_area.visible is False, "narrow nav list shown"
+    assert dialog._vdiv.visible is False, "narrow divider shown"
+    assert dialog._nav_dropdown.visible is True, "narrow dropdown hidden"
+    pack("settings nav (narrow)", dialog._nav_dropdown)
     dialog._apply_compact_segments(True)
     assert dialog._mode_segments[0].label is None, "compact segments keep their text"
     pack("settings mode selector (compact)", dialog._mode_selector)

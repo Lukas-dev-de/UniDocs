@@ -214,6 +214,19 @@ jobs:
       # choking on the unicode Flet prints (e.g. "\u25cf"); --no-rich-output
       # alone does not cover everything. LANG/LC_ALL do the same for the
       # MSYS/Git Bash wrapper on the Windows runner.
+      # Optional: ship one Google OAuth desktop client so users only click
+      # "Connect & sync". Store the downloaded client_secret.json content in
+      # the repository secret UNIDOCS_GDRIVE_CLIENT_SECRET_JSON. Without the
+      # secret the build still works; users then pick their own JSON file.
+      - name: Bundle Google OAuth client
+        shell: bash
+        env:
+          CLIENT_JSON: ${{ secrets.UNIDOCS_GDRIVE_CLIENT_SECRET_JSON }}
+        run: |
+          if [ -n "${CLIENT_JSON:-}" ]; then
+            printf '%s' "$CLIENT_JSON" > src/gdrive_client_secret.json
+          fi
+
       - name: Build app
         shell: bash
         env:

@@ -5,6 +5,7 @@ from ui.components.module_edit_dialog import ModuleEditDialog
 from ui.components.group_dialog import GroupDialog
 from ui.components.search_dialog import SearchDialog
 from ui.settings_dialog import SettingsDialog
+from ui.trash_dialog import TrashDialog
 from ui.context_menu import ContextMenu
 from models.module import Module
 from app_storage.app_config import AppConfig
@@ -29,6 +30,8 @@ class ModuleSidebar(ft.Container):
         on_module_update=None,
         theme: ThemeManager | None = None,
         on_group_select=None,
+        sync_service=None,
+        on_sync_finished=None,
     ):
         super().__init__()
         self._store = store
@@ -36,6 +39,8 @@ class ModuleSidebar(ft.Container):
         self._on_module_update = on_module_update
         self._theme = theme
         self._on_group_select = on_group_select
+        self._sync_service = sync_service
+        self._on_sync_finished = on_sync_finished
         self._cfg = AppConfig()
         # Writes the "recent modules" list the group home page reads back.
         self._home = HomeStore(store)
@@ -80,6 +85,27 @@ class ModuleSidebar(ft.Container):
             margin=ft.Margin.symmetric(vertical=8),
         )
 
+        # Sync: the icon is swapped for a ring while the worker runs.
+        self._sync_button = ft.IconButton(
+            icon=ft.Icons.CLOUD_SYNC,
+            tooltip="Sync now",
+            on_click=self._sync_now,
+        )
+        self._sync_ring = ft.ProgressRing(
+            width=18, height=18, stroke_width=2, visible=False
+        )
+        self._sync_slot = ft.Container(
+            width=40,
+            height=40,
+            alignment=ft.Alignment.CENTER,
+            content=self._sync_button,
+        )
+        self._trash_button = ft.IconButton(
+            icon=ft.Icons.DELETE_OUTLINE,
+            tooltip="Trash",
+            on_click=self._open_trash,
+        )
+
         self.content = ft.Column(
             expand=True,
             alignment="CENTER",
@@ -99,6 +125,9 @@ class ModuleSidebar(ft.Container):
                 ),
                 self._home_button,
                 self.modules_list,
+                self._sync_slot,
+                self._sync_ring,
+                self._trash_button,
                 ft.IconButton(
                     icon=ft.Icons.SETTINGS,
                     tooltip="Settings",
@@ -118,7 +147,16 @@ class ModuleSidebar(ft.Container):
             store=self._store,
             theme=self._theme,
             on_location_change=self._on_location_change,
+            sync_service=self._sync_service,
         )
+        self._trash_dialog = TrashDialog(
+            store=self._store,
+            on_changed=self._on_trash_changed,
+            sync_service=self._sync_service,
+        )
+        if self._sync_service is not None:
+            self._sync_service.on_progress = self._on_sync_progress
+            self._sync_service.on_done = self._on_sync_done
 
         self._ctx_menu = ContextMenu()
         self._create_dialog = ModuleCreateDialog(on_create=self._on_create_module)
@@ -186,6 +224,7 @@ class ModuleSidebar(ft.Container):
 
         for item in (
             self._settings_dialog,
+            self._trash_dialog,
             self._ctx_menu,
             self._delete_dialog,
             self._create_dialog,
@@ -203,6 +242,7 @@ class ModuleSidebar(ft.Container):
             return
         for item in (
             self._settings_dialog,
+            self._trash_dialog,
             self._ctx_menu,
             self._delete_dialog,
             self._create_dialog,
@@ -219,7 +259,53 @@ class ModuleSidebar(ft.Container):
     def _open_settings(self, e):
         self._settings_dialog.show()
 
-    #  search 
+    def _open_trash(self, e):
+        self._trash_dialog.show()
+
+    def _on_trash_changed(self):
+        self._reload_and_update()
+        if self._on_sync_finished:
+            self._on_sync_finished()
+
+    #  cloud sync
+
+    def _sync_now(self, e):
+        self._cfg.reload()
+        if self._sync_service is None or self._cfg.sync_provider == "off":
+            self.show_error("Configure cloud sync in Settings first.")
+            return
+        if not self._sync_service.start():
+            self.show_error("A sync is already running.")
+            return
+        self._sync_button.visible = False
+        self._sync_ring.visible = True
+        self.update()
+
+    def _on_sync_progress(self, phase, done, total, rel):
+        self._sync_button.visible = False
+        self._sync_ring.visible = True
+        if total:
+            self._sync_button.tooltip = f"Sync {done}/{total}"
+        self.update()
+
+    def _on_sync_done(self, report):
+        self._sync_ring.visible = False
+        self._sync_button.visible = True
+        self._sync_button.tooltip = "Sync now"
+        self.update()
+        self._reload_and_update()
+        trash_dialog = getattr(self, "_trash_dialog", None)
+        if trash_dialog is not None and trash_dialog.open:
+            trash_dialog.show()
+        if self._on_sync_finished:
+            self._on_sync_finished()
+        # A sync that changed nothing needs no banner: "Everything is up to
+        # date" popping up on every startup is noise, not feedback. Only speak
+        # up when something actually happened (or went wrong).
+        if report.changed or report.errors or report.aborted or report.cancelled:
+            self.show_error(report.message or report.summary())
+
+    #  search
 
     def _open_search(self, e=None):
         """Search every module of every group, not just the visible one."""
@@ -523,7 +609,8 @@ class ModuleSidebar(ft.Container):
                 self.show_error(f"Delete failed: {ex}")
             self._reload_and_update()
         self._open_delete_dialog(
-            f'Delete "{module.title}" and all its documents? This cannot be undone.',
+            f'Delete "{module.title}" and all its documents? '
+            "It moves to the trash and is removed on synced devices.",
             on_confirm,
         )
 

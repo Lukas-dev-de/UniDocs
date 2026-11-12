@@ -38,6 +38,8 @@ Usage
 from __future__ import annotations
 
 import json
+import platform
+import uuid
 from pathlib import Path
 from platformdirs import user_config_dir, user_documents_dir
 
@@ -160,7 +162,117 @@ class AppConfig:
     def seen_update(self, value: str):
         self._set("seen_update", value or "")
 
-    #  persistence 
+    #  cloud sync
+
+    @property
+    def sync_provider(self) -> str:
+        """Active sync backend: ``"off" | "webdav" | "gdrive"``."""
+        value = self._data.get("sync_provider") or "off"
+        return value if value in ("off", "webdav", "gdrive") else "off"
+
+    @sync_provider.setter
+    def sync_provider(self, value: str):
+        self._set("sync_provider", value if value in ("off", "webdav", "gdrive") else "off")
+
+    @property
+    def webdav_url(self) -> str:
+        return (self._data.get("webdav_url") or "").strip()
+
+    @webdav_url.setter
+    def webdav_url(self, value: str):
+        self._set("webdav_url", value.strip())
+
+    @property
+    def webdav_username(self) -> str:
+        return (self._data.get("webdav_username") or "").strip()
+
+    @webdav_username.setter
+    def webdav_username(self, value: str):
+        self._set("webdav_username", value.strip())
+
+    @property
+    def webdav_root(self) -> str:
+        """Remote folder that mirrors the local UniDocs root."""
+        return (self._data.get("webdav_root") or "UniDocs").strip("/") or "UniDocs"
+
+    @webdav_root.setter
+    def webdav_root(self, value: str):
+        self._set("webdav_root", value.strip("/") or "UniDocs")
+
+    @property
+    def gdrive_folder_id(self) -> str:
+        return self._data.get("gdrive_folder_id") or ""
+
+    @gdrive_folder_id.setter
+    def gdrive_folder_id(self, value: str):
+        self._set("gdrive_folder_id", value or "")
+
+    @property
+    def gdrive_client_secret_path(self) -> str:
+        return self._data.get("gdrive_client_secret_path") or ""
+
+    @gdrive_client_secret_path.setter
+    def gdrive_client_secret_path(self, value: str):
+        self._set("gdrive_client_secret_path", value or "")
+
+    @property
+    def sync_on_start(self) -> bool:
+        return bool(self._data.get("sync_on_start", False))
+
+    @sync_on_start.setter
+    def sync_on_start(self, value: bool):
+        self._set("sync_on_start", bool(value))
+
+    @property
+    def trash_auto_empty_enabled(self) -> bool:
+        return bool(self._data.get("trash_auto_empty_enabled", False))
+
+    @trash_auto_empty_enabled.setter
+    def trash_auto_empty_enabled(self, value: bool):
+        self._set("trash_auto_empty_enabled", bool(value))
+
+    @property
+    def trash_retention_days(self) -> int:
+        try:
+            days = int(self._data.get("trash_retention_days", 30))
+        except (TypeError, ValueError):
+            return 30
+        return max(1, min(days, 3650))
+
+    @trash_retention_days.setter
+    def trash_retention_days(self, value: int):
+        try:
+            days = int(value)
+        except (TypeError, ValueError):
+            days = 30
+        self._set("trash_retention_days", max(1, min(days, 3650)))
+
+    @property
+    def device_id(self) -> str:
+        """Stable per-install id used to name trash entries and conflicts."""
+        value = self._data.get("device_id") or ""
+        if not value:
+            value = str(uuid.uuid4())
+            self._set("device_id", value)
+        return value
+
+    @property
+    def device_name(self) -> str:
+        name = (self._data.get("device_name") or "").strip()
+        if name:
+            return name
+        name = (platform.node() or "").strip()
+        return name or "Device"
+
+    @device_name.setter
+    def device_name(self, value: str):
+        self._set("device_name", (value or "").strip())
+
+    #  persistence
+
+    def reload(self) -> None:
+        """Re-read the file after another AppConfig instance changed it."""
+        self._load()
 
     def _load(self):
         try:

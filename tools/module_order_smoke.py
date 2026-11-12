@@ -118,7 +118,7 @@ def test_corrupt_order() -> None:
 
 
 def test_legacy_order_is_migrated() -> None:
-    """A pre-2.5.1 `.order` (folder names) becomes ids on the next load."""
+    """A pre-2.6.0 `.order` (folder names) becomes ids on the next load."""
     store = fresh_store()
     (store.root / ORDER_FILENAME).write_text(
         json.dumps(["Physics", "Math", "Chemistry"])

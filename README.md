@@ -11,6 +11,47 @@ You can change the look of the app in the settings: choose one of 7 color palett
 
 Be aware, first start might take longer than usual ... I don't know why yet
 
+## Cloud sync
+
+Settings > Cloud sync can mirror the UniDocs folder to another device. Two backends
+are supported on desktop (Windows, macOS, Linux):
+
+- **Nextcloud / WebDAV (ownCloud, Synology, generic WebDAV):** enter the server URL
+  (for Nextcloud the full DAV user root, e.g.
+  `https://cloud.example.com/remote.php/dav/files/USER`), username, an app password
+  (2FA accounts need one) and the remote folder (default `UniDocs`). "Save & test"
+  stores the password in the OS keyring and checks the connection.
+- **Google Drive:** every user signs in with their **own Google account**; files
+  go into that user's own Drive. The OAuth client is only the app registration, it
+  does not share accounts or storage. The app uses the `drive.file` scope, so it
+  only sees files it created itself. Select your own Google Cloud desktop OAuth
+  `client_secret.json` in the settings, or ship one via the
+  `UNIDOCS_GDRIVE_CLIENT_SECRET` environment variable / a
+  `src/gdrive_client_secret.json` file at build time (release workflow: repository
+  secret `UNIDOCS_GDRIVE_CLIENT_SECRET_JSON`). With a bundled client the settings
+  hide the file picker and the user only clicks "Connect & sync". That opens the
+  browser login; the refresh token is stored in the user's keyring. Publish the
+  OAuth consent screen to "In production", otherwise testing tokens expire after
+  seven days.
+
+The sync button in the sidebar runs a manual sync; "Sync on startup" is optional.
+Conflicts keep both versions as `name (Konflikt <device>-<timestamp>).ext`.
+Sidecar files (`tags.json`, `.doc_tags`, `.order`, `.home.json`) sync as whole
+files, so editing tags or the sidebar order on two devices at the same time
+produces a conflict copy instead of a merge. WebDAV offers no content hash; the
+engine compares size and modification time there and prefers a conflict copy
+when unsure. For the same reason, two devices that delete the same item offline
+can keep two trash entries on WebDAV; both are restorable. Google Drive compares
+MD5 checksums and collapses such duplicates.
+
+Deleting a document or module moves it into a synced `.trash` folder instead of
+removing it. The trash icon in the sidebar lists entries with restore and delete
+actions. Settings > Cloud sync can empty the trash automatically after a number of
+days. Do not point two sync tools (for example the Nextcloud desktop client) at the
+same folder.
+
+Sync is desktop-only for now; mobile builds keep working locally.
+
 # Contributing:
 
 ## Workflow
@@ -52,7 +93,7 @@ do not.
 - [ ] feature: grouping modules in sidebar
 
 #### high effort
-- [ ] feature: file syncing (for example via self-hosting, github or googledrive ...)
+- [ ] feature: sync on mobile (the engine is ready; OAuth and the mobile app-data path still need work)
 
 
 <br>

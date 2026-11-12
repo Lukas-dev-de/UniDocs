@@ -24,6 +24,39 @@ def test_defaults_without_any_file(paths):
 
     assert cfg.theme_mode == "system"
     assert cfg.seen_update == ""
+    assert cfg.sync_provider == "off"
+    assert cfg.webdav_root == "UniDocs"
+    assert cfg.trash_retention_days == 30
+    assert cfg.trash_auto_empty_enabled is False
+
+
+def test_sync_settings_persist_and_clamp(paths):
+    cfg = AppConfig()
+    cfg.sync_provider = "webdav"
+    cfg.webdav_url = " https://cloud.example.com/dav "
+    cfg.webdav_username = " user "
+    cfg.webdav_root = "/UniDocs/"
+    cfg.trash_retention_days = 0
+    device_a = cfg.device_id
+
+    reloaded = AppConfig()
+
+    assert reloaded.sync_provider == "webdav"
+    assert reloaded.webdav_url == "https://cloud.example.com/dav"
+    assert reloaded.webdav_username == "user"
+    assert reloaded.webdav_root == "UniDocs"
+    assert reloaded.trash_retention_days == 1
+    assert reloaded.device_id == device_a
+
+
+def test_reload_picks_up_external_change(paths):
+    first = AppConfig()
+    second = AppConfig()
+    second.sync_on_start = True
+
+    first.reload()
+
+    assert first.sync_on_start is True
 
 
 def test_migrates_legacy_file_once(paths):
