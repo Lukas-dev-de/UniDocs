@@ -49,6 +49,24 @@ def test_sync_settings_persist_and_clamp(paths):
     assert reloaded.device_id == device_a
 
 
+def test_unidocs_settings_persist(paths):
+    cfg = AppConfig()
+    cfg.sync_provider = "unidocs"
+    cfg.unidocs_url = " https://unidocs.example.com/ "
+
+    reloaded = AppConfig()
+
+    assert reloaded.sync_provider == "unidocs"
+    assert reloaded.unidocs_url == "https://unidocs.example.com"
+
+
+def test_unidocs_data_dir_env_overrides_location(paths, monkeypatch, tmp_path):
+    cfg = AppConfig()
+    monkeypatch.setenv("UNIDOCS_DATA_DIR", str(tmp_path / "data"))
+
+    assert cfg.unidocs_location == (tmp_path / "data").resolve()
+
+
 def test_reload_picks_up_external_change(paths):
     first = AppConfig()
     second = AppConfig()

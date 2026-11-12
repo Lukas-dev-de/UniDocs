@@ -38,6 +38,7 @@ Usage
 from __future__ import annotations
 
 import json
+import os
 import platform
 import uuid
 from pathlib import Path
@@ -72,6 +73,11 @@ class AppConfig:
 
     @property
     def unidocs_location(self) -> Path:
+        # ``UNIDOCS_DATA_DIR`` pins the storage folder (server/Docker). It wins
+        # over the saved setting so a container always uses its mounted volume.
+        env = os.environ.get("UNIDOCS_DATA_DIR", "").strip()
+        if env:
+            return Path(env).expanduser().resolve()
         raw = self._data.get("unidocs_location")
         if raw:
             return Path(raw)
@@ -166,13 +172,25 @@ class AppConfig:
 
     @property
     def sync_provider(self) -> str:
-        """Active sync backend: ``"off" | "webdav" | "gdrive"``."""
+        """Active sync backend: ``"off" | "webdav" | "gdrive" | "unidocs"``."""
         value = self._data.get("sync_provider") or "off"
-        return value if value in ("off", "webdav", "gdrive") else "off"
+        return value if value in ("off", "webdav", "gdrive", "unidocs") else "off"
 
     @sync_provider.setter
     def sync_provider(self, value: str):
-        self._set("sync_provider", value if value in ("off", "webdav", "gdrive") else "off")
+        self._set(
+            "sync_provider",
+            value if value in ("off", "webdav", "gdrive", "unidocs") else "off",
+        )
+
+    @property
+    def unidocs_url(self) -> str:
+        """Base URL of the UniDocs server, e.g. ``https://unidocs.example.com``."""
+        return (self._data.get("unidocs_url") or "").strip().rstrip("/")
+
+    @unidocs_url.setter
+    def unidocs_url(self, value: str):
+        self._set("unidocs_url", (value or "").strip().rstrip("/"))
 
     @property
     def webdav_url(self) -> str:

@@ -16,6 +16,7 @@ from sync.engine import SyncEngine
 from sync.gdrive import GDriveProvider, load_credentials, resolve_client_secret
 from sync.state import SyncState
 from sync.types import SyncReport
+from sync.unidocs import UniDocsProvider
 from sync.webdav import WebDAVProvider
 
 logger = logging.getLogger(__name__)
@@ -26,11 +27,18 @@ def webdav_password_key(url: str, username: str) -> str:
     return "webdav_password:" + hashlib.sha256(raw).hexdigest()[:16]
 
 
+def unidocs_token_key(url: str) -> str:
+    raw = f"unidocs\n{url.strip()}".encode("utf-8")
+    return "unidocs_token:" + hashlib.sha256(raw).hexdigest()[:16]
+
+
 def provider_identity(cfg: AppConfig, gdrive_folder_id: str = "") -> str:
     if cfg.sync_provider == "webdav":
         return f"webdav:{cfg.webdav_url}|{cfg.webdav_username}|{cfg.webdav_root}"
     if cfg.sync_provider == "gdrive":
         return f"gdrive:{gdrive_folder_id or cfg.gdrive_folder_id or 'auto'}"
+    if cfg.sync_provider == "unidocs":
+        return f"unidocs:{cfg.unidocs_url}"
     return "off"
 
 
@@ -39,6 +47,8 @@ def provider_label(cfg: AppConfig) -> str:
         return f"WebDAV {cfg.webdav_url} ({cfg.webdav_username})"
     if cfg.sync_provider == "gdrive":
         return "Google Drive"
+    if cfg.sync_provider == "unidocs":
+        return f"UniDocs server {cfg.unidocs_url}"
     return "Sync aus"
 
 
@@ -185,6 +195,16 @@ class SyncService:
                 password,
                 remote_root=self.cfg.webdav_root,
             )
+            return provider, provider_identity(self.cfg)
+
+        if provider_name == "unidocs":
+            url = self.cfg.unidocs_url
+            if not url:
+                raise SyncAuthError("UniDocs server URL is missing")
+            token = self.secrets.get_secret(unidocs_token_key(url))
+            if not token:
+                raise SyncAuthError("UniDocs server token is missing")
+            provider = UniDocsProvider(url, token)
             return provider, provider_identity(self.cfg)
 
         if provider_name == "gdrive":

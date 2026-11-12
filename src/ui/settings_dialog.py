@@ -7,7 +7,8 @@ from app_storage.secrets_store import SecretsStore
 from app_logging import get_logger
 import updater
 from sync.gdrive import TOKEN_KEY, resolve_client_secret
-from sync.service import webdav_password_key
+from sync.service import unidocs_token_key, webdav_password_key
+from sync.unidocs import UniDocsProvider
 from sync.webdav import WebDAVProvider
 from ui.theme import MODE_LABELS, PALETTES, ThemeManager
 from ui.update_install import UpdateInstaller
@@ -216,11 +217,30 @@ class SettingsDialog(ft.AlertDialog):
             value=self._cfg.sync_provider,
             options=[
                 ft.dropdown.Option(key="off", text="Off (local only)"),
+                ft.dropdown.Option(key="unidocs", text="UniDocs server"),
                 ft.dropdown.Option(key="webdav", text="Nextcloud / WebDAV"),
                 ft.dropdown.Option(key="gdrive", text="Google Drive"),
             ],
             on_select=self._on_sync_provider_change,
             expand=True,
+        )
+        self._unidocs_url = ft.TextField(
+            label="Server URL",
+            value=self._cfg.unidocs_url,
+            hint_text="https://unidocs.example.com",
+            dense=True,
+        )
+        self._unidocs_token = ft.TextField(
+            label="API token",
+            hint_text="Leave empty to keep the saved token",
+            password=True,
+            can_reveal_password=True,
+            dense=True,
+        )
+        self._unidocs_save = ft.FilledButton(
+            "Save & test",
+            icon=ft.Icons.CLOUD_DONE_OUTLINED,
+            on_click=self._save_unidocs,
         )
         self._webdav_url = ft.TextField(
             label="Server URL",
@@ -255,6 +275,24 @@ class SettingsDialog(ft.AlertDialog):
         )
         self._sync_status = ft.Text(
             "", size=12, color=ft.Colors.ON_SURFACE_VARIANT
+        )
+        self._unidocs_group = ft.Column(
+            spacing=6,
+            tight=True,
+            controls=[
+                self._unidocs_url,
+                self._unidocs_token,
+                ft.Row(
+                    spacing=8,
+                    controls=[self._unidocs_save, self._sync_progress],
+                ),
+                ft.Text(
+                    "The token is printed when the server starts "
+                    "(unidocs-server) and lives in ~/.config/UniDocs/server_token.txt.",
+                    size=12,
+                    color=ft.Colors.ON_SURFACE_VARIANT,
+                ),
+            ],
         )
         self._webdav_group = ft.Column(
             spacing=6,
@@ -349,6 +387,7 @@ class SettingsDialog(ft.AlertDialog):
         self._sync_section = self._section(
             "Cloud sync",
             self._sync_provider,
+            self._unidocs_group,
             self._webdav_group,
             self._gdrive_group,
             self._sync_status,
@@ -720,6 +759,7 @@ class SettingsDialog(ft.AlertDialog):
 
     def _apply_sync_visibility(self) -> None:
         provider = self._cfg.sync_provider
+        self._unidocs_group.visible = provider == "unidocs"
         self._webdav_group.visible = provider == "webdav"
         # Offer the one-click Google login also while sync is off.
         self._gdrive_group.visible = provider in ("off", "gdrive")
@@ -733,6 +773,8 @@ class SettingsDialog(ft.AlertDialog):
 
     def _sync_sync_controls(self) -> None:
         self._sync_provider.value = self._cfg.sync_provider
+        self._unidocs_url.value = self._cfg.unidocs_url
+        self._unidocs_token.value = ""
         self._webdav_url.value = self._cfg.webdav_url
         self._webdav_user.value = self._cfg.webdav_username
         self._webdav_password.value = ""
@@ -783,6 +825,38 @@ class SettingsDialog(ft.AlertDialog):
             return
         page.run_thread(lambda: self._test_webdav_worker(url, user, password, root))
 
+    def _save_unidocs(self, e) -> None:
+        url = (self._unidocs_url.value or "").strip().rstrip("/")
+        token = self._unidocs_token.value or ""
+        self._cfg.unidocs_url = url
+        self._set_sync_busy(True, "Connecting…")
+        page = self.page
+        if page is None:
+            return
+        page.run_thread(lambda: self._test_unidocs_worker(url, token))
+
+    def _test_unidocs_worker(self, url, token) -> None:
+        error = None
+        try:
+            if not url:
+                raise ValueError("Server URL is missing")
+            if token:
+                self._secrets.set_secret(unidocs_token_key(url), token)
+            else:
+                token = self._secrets.get_secret(unidocs_token_key(url)) or ""
+                if not token:
+                    raise ValueError("API token is missing")
+            provider = UniDocsProvider(url, token)
+            try:
+                provider.test_connection()
+            finally:
+                provider.close()
+        except Exception as ex:
+            error = str(ex)
+        page = self.page
+        if page is not None:
+            page.run_task(self._show_webdav_result, error)
+
     def _test_webdav_worker(self, url, user, password, root) -> None:
         error = None
         try:
@@ -814,6 +888,7 @@ class SettingsDialog(ft.AlertDialog):
         self.update()
 
     def _set_sync_busy(self, busy: bool, message: str = "") -> None:
+        self._unidocs_save.disabled = busy
         self._webdav_save.disabled = busy
         self._sync_progress.visible = busy
         if message:
