@@ -193,59 +193,92 @@ Then open `http://<tailscale-ip>:8550/` in Safari and use *Share -> Add to Home 
 The storage folder is the one set in the settings on the server, imports are uploaded to
 the server, and "open document" sends the file through `/files` (PDFs and images inline,
 everything else as a download into the Files app). There is no login - only devices in
-your tailnet can reach it. For a permanent install, run the script from a systemd unit:
+your tailnet can reach it. For a permanent install, use the systemd unit from
+[Server (self-hosted)](#server-self-hosted).
 
-```ini
-[Unit]
-Description=UniDocs web
-After=network-online.target
+### Server (self-hosted)
 
-[Service]
-WorkingDirectory=/path/to/UniDocs
-ExecStart=/path/to/UniDocs/.venv/bin/python tools/serve_web.py
-Restart=on-failure
+Run UniDocs on your own server so a desktop app can sync its documents against
+it instead of Nextcloud or Google Drive, and an iPad can open the web UI over
+Tailscale. The server is one process: the Flet web app plus an authenticated
+sync API.
 
-[Install]
-WantedBy=default.target
-```
+Two environment variables configure it:
 
-### Server: sync + Docker
+- `UNIDOCS_API_TOKEN` pins the API token (otherwise generated on first start,
+  printed to the log and stored in `~/.config/UniDocs/server_token.txt`).
+- `UNIDOCS_DATA_DIR` pins the storage folder (otherwise the app setting is
+  used). Point it at the mounted volume / disk where the documents live.
 
-The same server also exposes an authenticated sync API, so the desktop app can mirror
-its folder against a self-hosted UniDocs server instead of Nextcloud or Google Drive.
-On startup the server prints an API token (also written to
-`~/.config/UniDocs/server_token.txt`); connect the desktop app under
-*Settings → Cloud sync → UniDocs server* with the server URL and that token.
+#### Option A: Docker (recommended)
 
-Two environment variables configure a headless server:
-
-- `UNIDOCS_API_TOKEN` pins the API token (otherwise generated + printed on first start).
-- `UNIDOCS_DATA_DIR` pins the storage folder (otherwise the app setting is used).
-
-Docker is the easiest way to run a server release:
+Published releases push the image to GitHub Container Registry
+(`ghcr.io/lukas-dev-de/unidocs-server`), so no build is needed:
 
 ```bash
-UNIDOCS_API_TOKEN=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))") \
-  docker compose up -d
-```
+# 1. Pick an API token (this is what the desktop app will use to log in).
+TOKEN=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))")
 
-Published releases also push the image to GitHub Container Registry, so you
-can skip building entirely:
-
-```bash
-docker run -d -p 8550:8550 -v unidocs-data:/data \
+# 2. Run it. The two volumes persist your documents and the config/token.
+docker run -d --name unidocs -p 8550:8550 \
+  -v unidocs-data:/data \
   -v unidocs-config:/root/.config/UniDocs \
-  -e UNIDOCS_API_TOKEN=change-me \
+  -e UNIDOCS_API_TOKEN="$TOKEN" \
+  --restart unless-stopped \
   ghcr.io/lukas-dev-de/unidocs-server:latest
+
+# 3. Show the logs to confirm it started.
+docker logs -f unidocs
 ```
 
-`docker compose` (above) builds from source; either way the volumes hold
-`/data` (documents) and `~/.config/UniDocs` (config + token). A bare-metal
-install uses the systemd unit committed at `deploy/unidocs-server.service`.
+Alternatively, build from this checkout with `docker compose`:
+
+```bash
+UNIDOCS_API_TOKEN="$TOKEN" docker compose up -d
+```
+
+#### Option B: Bare metal (pip + systemd)
+
+```bash
+# 1. Get the code and a virtualenv.
+git clone https://github.com/Lukas-dev-de/UniDocs.git
+cd UniDocs
+python3 -m venv .venv
+./.venv/bin/pip install -e '.[web]'
+
+# 2. Start it once to check it works (prints the API token).
+./.venv/bin/python tools/serve_web.py --host 0.0.0.0 --port 8550
+```
+
+For a permanent install, copy the committed unit, adapt the two paths, and
+enable it:
+
+```bash
+sudo cp deploy/unidocs-server.service /etc/systemd/system/
+# edit /etc/systemd/system/unidocs-server.service: WorkingDirectory and ExecStart
+sudo systemctl daemon-reload
+sudo systemctl enable --now unidocs-server
+```
+
+Pin the token by uncommenting `Environment=UNIDOCS_API_TOKEN=...` in the unit,
+otherwise the server generates one on first start and writes it to
+`~/.config/UniDocs/server_token.txt`.
+
+#### Connect the desktop app
+
+On the desktop: *Settings → Cloud sync → UniDocs server*, enter the server URL
+(for example `http://<server-ip>:8550`) and the API token, then *Save & test*.
+Enable *Sync on startup* if you want it to run automatically.
+
+#### Expose it safely
+
+The web UI has no login, so only expose it over a trusted network. On Tailscale
+this is `tailscale serve`; for a public hostname put a reverse proxy with TLS in
+front and keep port 8550 bound to localhost. The sync API is protected by the
+token either way.
 
 The sync API lives under `/api/v1` (list, download, upload with `If-Match`, move,
-delete) and requires `Authorization: Bearer <token>`. The web UI has no login and stays
-reachable only through your tailnet.
+delete) and requires `Authorization: Bearer <token>`.
 
 ## Releases (automated)
 
