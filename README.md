@@ -209,6 +209,34 @@ Restart=on-failure
 WantedBy=default.target
 ```
 
+### Server: sync + Docker
+
+The same server also exposes an authenticated sync API, so the desktop app can mirror
+its folder against a self-hosted UniDocs server instead of Nextcloud or Google Drive.
+On startup the server prints an API token (also written to
+`~/.config/UniDocs/server_token.txt`); connect the desktop app under
+*Settings → Cloud sync → UniDocs server* with the server URL and that token.
+
+Two environment variables configure a headless server:
+
+- `UNIDOCS_API_TOKEN` pins the API token (otherwise generated + printed on first start).
+- `UNIDOCS_DATA_DIR` pins the storage folder (otherwise the app setting is used).
+
+Docker is the easiest way to run a server release:
+
+```bash
+UNIDOCS_API_TOKEN=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))") \
+  docker compose up -d
+```
+
+The token prints nowhere then, so set it yourself as above; `docker compose` mounts
+volumes for `/data` (documents) and `~/.config/UniDocs` (config + token). A bare-metal
+install uses the systemd unit committed at `deploy/unidocs-server.service`.
+
+The sync API lives under `/api/v1` (list, download, upload with `If-Match`, move,
+delete) and requires `Authorization: Bearer <token>`. The web UI has no login and stays
+reachable only through your tailnet.
+
 ## Releases (automated)
 
 Publishing a release on GitHub triggers `.github/workflows/release-build.yml`, which builds

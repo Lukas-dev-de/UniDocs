@@ -2,6 +2,9 @@
 ## v2.6.0
 - new:
    - web: `tools/serve_web.py` hosts UniDocs as a dynamic web app on a home server, so an iPad can open it over Tailscale and add it to the home screen. Documents stay on the server; opening one downloads it through the server instead of calling `xdg-open`
+   - server: a self-hosted UniDocs server now also speaks a sync API (SHA-256 hashes, conditional uploads). The desktop app can mirror its folder against that server instead of Nextcloud/Google Drive - connect it under Settings → Cloud sync with the server URL and API token
+   - server: the server ships as a Docker image (`Dockerfile` + `docker-compose.yml`) and a systemd unit (`deploy/unidocs-server.service`); `UNIDOCS_DATA_DIR` pins the storage folder, `UNIDOCS_API_TOKEN` pins the API token
+   - sync: the UniDocs server sync provider is the third backend next to WebDAV and Google Drive; the token is stored in the OS keyring
    - sidebar: a search button above the home button opens a dialog that searches every module of every group - by module title, module description and document name. A document hit opens its module without starting the file
    - home page: new "Fortschritt" widget. Give it a name and a start and end date (a semester, for example) and the card shows how much of that period has passed: progress bar, percentage and "Tag X von Y"
    - home page: the "Fortschritt" widget can draw its share as a bar or as a 270-degree tacho dial, picked under "Darstellung" in the widget's settings. Files without a choice, or with one this build does not know, keep the bar

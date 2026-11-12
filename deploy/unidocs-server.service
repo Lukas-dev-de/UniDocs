@@ -1,0 +1,18 @@
+[Unit]
+Description=UniDocs server (web app + sync API)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+# Adjust WorkingDirectory and the venv path to your checkout.
+WorkingDirectory=/path/to/UniDocs
+ExecStart=/path/to/UniDocs/.venv/bin/python tools/serve_web.py --host 0.0.0.0 --port 8550
+# Pin the API token so it is stable across restarts (otherwise it is
+# generated on first start and stored in ~/.config/UniDocs/server_token.txt).
+# Environment=UNIDOCS_API_TOKEN=change-me
+# Environment=UNIDOCS_DATA_DIR=/var/lib/unidocs
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
