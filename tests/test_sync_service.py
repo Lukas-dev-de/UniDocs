@@ -12,7 +12,7 @@ from app_storage.trash_store import TrashStore
 from sync.service import SyncService, webdav_password_key
 from sync.state import SyncState
 from sync.types import FileState
-from tests.fake_provider import FakeProvider
+from fake_provider import FakeProvider
 
 
 class FakePage:

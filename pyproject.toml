@@ -26,6 +26,10 @@ dependencies = [
     "keyring>=24.0.0",
     "webdav4>=0.10.0",
     "httpx>=0.27.0",
+    # Pinned: flet-web 0.84 still passes openapi_prefix to FastAPI; newer
+    # FastAPI releases dropped it and the web server dies on startup. The sync
+    # server API (src/unidocs_server) imports FastAPI, so it is a runtime dep.
+    "fastapi==0.136.0",
     "google-api-python-client>=2.100.0",
     "google-auth>=2.23.0",
     "google-auth-oauthlib>=1.1.0",
@@ -36,9 +40,6 @@ dependencies = [
 # the browser only renders the Flet UI. See tools/serve_web.py.
 web = [
     "flet-web==0.84.0",
-    # flet-web 0.84 still passes openapi_prefix to FastAPI; newer FastAPI
-    # releases dropped it and the web server dies on startup.
-    "fastapi==0.136.0",
     "uvicorn[standard]>=0.35",
 ]
 

@@ -5,7 +5,7 @@ import threading
 from app_storage.trash_store import TrashStore
 from sync.engine import SyncEngine
 from sync.state import SyncState
-from tests.fake_provider import FakeProvider
+from fake_provider import FakeProvider
 
 
 def make_engine(root, provider, state_path, device, cancel=None):

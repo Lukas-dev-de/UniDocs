@@ -37,6 +37,9 @@ jobs:
 
       - name: Install dependencies from pyproject.toml
         run: |
+          # tomli first: Python 3.10 has no tomllib, and the script below needs
+          # one of them to read pyproject.toml.
+          python -m pip install --upgrade pip tomli
           python - <<'PY' > /tmp/runtime-requirements.txt
           try:
               import tomllib
@@ -46,8 +49,7 @@ jobs:
               deps = tomllib.load(handle)["project"]["dependencies"]
           print("\n".join(deps))
           PY
-          python -m pip install --upgrade pip
-          python -m pip install -r /tmp/runtime-requirements.txt tomli pytest ruff
+          python -m pip install -r /tmp/runtime-requirements.txt pytest ruff
 
       - name: Lint
         run: ruff check .
