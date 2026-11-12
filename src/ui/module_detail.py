@@ -581,6 +581,9 @@ class ModuleDetail(ft.Container):
         key = getattr(e, "key", "") or ""
         if key in ("Escape", "Esc") and self._is_selecting():
             self._exit_select_mode()
+        # TEST HOOK (remove before merge): Space previews the themed snack bar.
+        if key in (" ", "Space", "Spacebar"):
+            self.show_error("Everything is up to date")
 
     def _selected_docs(self) -> list[Document]:
         if self.module is None:

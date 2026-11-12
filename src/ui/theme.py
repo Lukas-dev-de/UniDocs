@@ -424,20 +424,59 @@ class ThemeManager:
             return
 
         palette = self.palette
-        page.theme = ft.Theme(
-            color_scheme=palette.scheme(dark=False),
-            use_material3=True,
-        )
-        page.dark_theme = ft.Theme(
-            color_scheme=palette.scheme(dark=True),
-            use_material3=True,
-        )
+        page.theme = self._build_theme(palette, dark=False)
+        page.dark_theme = self._build_theme(palette, dark=True)
         page.theme_mode = MODES[self.mode]
         # The sidebar and the detail view paint themselves in SURFACE. Let the
         # page sit one step below that (SURFACE_DIM, the M3 "app background"),
         # otherwise both panels melt into the background - worst in dark mode.
         page.bgcolor = ft.Colors.SURFACE_DIM
         page.update()
+
+    def _build_theme(self, palette: Palette, *, dark: bool) -> ft.Theme:
+        """Full theme: the colour scheme plus the floating overlay surfaces.
+
+        Tooltips and snack bars are the two controls Flet does not paint from
+        the scheme on its own - left unthemed they fall back to a flat
+        near-white bar that clashes with every palette. They get their colours
+        here: dark-on-light in light mode, and a slightly raised surface
+        (never white) in dark mode, so the hover text and the sync banner stop
+        reading as a broken white strip.
+        """
+        scheme = palette.scheme(dark=dark)
+        if dark:
+            # A light block on a dark page looks like a rendering bug. Use the
+            # raised card surface instead of the M3 "inverse" (near-white) one.
+            overlay_bg = scheme.surface_container_high
+            overlay_fg = scheme.on_surface
+        else:
+            overlay_bg = scheme.inverse_surface
+            overlay_fg = scheme.on_inverse_surface
+
+        tooltip = ft.TooltipTheme(
+            decoration=ft.BoxDecoration(
+                bgcolor=overlay_bg,
+                border_radius=ft.BorderRadius.all(6),
+            ),
+            text_style=ft.TextStyle(color=overlay_fg, size=13),
+            wait_duration=400,
+        )
+        snackbar = ft.SnackBarTheme(
+            bgcolor=overlay_bg,
+            content_text_style=ft.TextStyle(color=overlay_fg, size=14),
+            behavior=ft.SnackBarBehavior.FLOATING,
+            shape=ft.RoundedRectangleBorder(
+                radius=12,
+                side=ft.BorderSide(1, scheme.outline_variant),
+            ),
+            elevation=6,
+        )
+        return ft.Theme(
+            color_scheme=scheme,
+            use_material3=True,
+            tooltip_theme=tooltip,
+            snackbar_theme=snackbar,
+        )
 
     #  mutations (persisted) 
 

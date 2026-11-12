@@ -299,11 +299,11 @@ class ModuleSidebar(ft.Container):
             trash_dialog.show()
         if self._on_sync_finished:
             self._on_sync_finished()
-        message = report.message or report.summary()
-        if report.aborted:
-            self.show_error(message)
-        else:
-            self.show_error(message)
+        # A sync that changed nothing needs no banner: "Everything is up to
+        # date" popping up on every startup is noise, not feedback. Only speak
+        # up when something actually happened (or went wrong).
+        if report.changed or report.errors or report.aborted or report.cancelled:
+            self.show_error(report.message or report.summary())
 
     #  search
 
