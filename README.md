@@ -229,8 +229,18 @@ UNIDOCS_API_TOKEN=$(python3 -c "import secrets; print(secrets.token_urlsafe(32))
   docker compose up -d
 ```
 
-The token prints nowhere then, so set it yourself as above; `docker compose` mounts
-volumes for `/data` (documents) and `~/.config/UniDocs` (config + token). A bare-metal
+Published releases also push the image to GitHub Container Registry, so you
+can skip building entirely:
+
+```bash
+docker run -d -p 8550:8550 -v unidocs-data:/data \
+  -v unidocs-config:/root/.config/UniDocs \
+  -e UNIDOCS_API_TOKEN=change-me \
+  ghcr.io/lukas-dev-de/unidocs-server:latest
+```
+
+`docker compose` (above) builds from source; either way the volumes hold
+`/data` (documents) and `~/.config/UniDocs` (config + token). A bare-metal
 install uses the systemd unit committed at `deploy/unidocs-server.service`.
 
 The sync API lives under `/api/v1` (list, download, upload with `If-Match`, move,
