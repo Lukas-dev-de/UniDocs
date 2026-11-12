@@ -189,7 +189,7 @@ class ModuleStore:
                 if module:
                     found.append((folder.name, module))
 
-        # Rewrite a pre-2.5.1 order file before reading it: the mapping needs
+        # Rewrite a pre-2.6.0 order file before reading it: the mapping needs
         # the loaded modules (and their ids) anyway.
         self._migrate_order(group, [module for _, module in found])
 
@@ -267,7 +267,7 @@ class ModuleStore:
         :meth:`load_modules` to fall back to alphabetical sorting.
 
         The file stores ids, not titles, so a module keeps its slot when its
-        folder is renamed from the outside. An order written before 2.5.1 (a
+        folder is renamed from the outside. An order written before 2.6.0 (a
         bare list of folder names) is mapped on the fly; ``load_modules`` then
         rewrites it as ids.
         """
@@ -302,7 +302,7 @@ class ModuleStore:
         )
 
     def _read_order(self, group: str | None):
-        """Raw ``.order`` payload: a list (pre-2.5.1), a dict, or ``None``."""
+        """Raw ``.order`` payload: a list (pre-2.6.0), a dict, or ``None``."""
         path = self._group_dir(group) / ORDER_FILENAME
         try:
             return json.loads(path.read_text(encoding="utf-8"))
@@ -320,7 +320,7 @@ class ModuleStore:
         return str(module_id) if module_id else None
 
     def _migrate_order(self, group: str | None, modules: list[Module]) -> None:
-        """Rewrite a pre-2.5.1 order file (folder names) as module ids.
+        """Rewrite a pre-2.6.0 order file (folder names) as module ids.
 
         Runs from :meth:`load_modules`, because mapping a folder name to an id
         needs the modules - and by then every legacy module has its id written
@@ -726,7 +726,7 @@ class ModuleStore:
             group=group,
         )
         if not meta.get("id"):
-            # Module from before 2.5.1: keep the id we just generated, so it
+            # Module from before 2.6.0: keep the id we just generated, so it
             # is the same on every later load.
             self._write_meta(folder, module)
 

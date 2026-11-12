@@ -33,7 +33,7 @@ class Module:
     documents: list[Document] = field(default_factory=list)
     # Stable identity, kept in `.meta`. Survives renames and moving between
     # groups, so the UI can recognise "the same module" without comparing
-    # titles. Modules created before v2.5.1 get one on first load.
+    # titles. Modules created before v2.6.0 get one on first load.
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
 
     def add_document(self, document: Document) -> None:

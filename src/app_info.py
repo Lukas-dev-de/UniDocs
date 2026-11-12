@@ -7,7 +7,7 @@ metadata - ``tools/check_version.py`` (release) and ``tests/test_app_info.py``
 (CI) verify that the two match.
 """
 
-APP_VERSION = "2.5.0"
+APP_VERSION = "2.6.0"
 
 GITHUB_REPO = "Lukas-dev-de/UniDocs"          # owner/name, for the GitHub API
 REPO_URL = f"https://github.com/{GITHUB_REPO}"

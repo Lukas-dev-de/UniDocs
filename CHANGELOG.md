@@ -1,5 +1,5 @@
 # CHANGELOG
-## v2.5.1 - Unreleased
+## v2.6.0
 - new:
    - sidebar: a search button above the home button opens a dialog that searches every module of every group - by module title, module description and document name. A document hit opens its module without starting the file
    - home page: new "Fortschritt" widget. Give it a name and a start and end date (a semester, for example) and the card shows how much of that period has passed: progress bar, percentage and "Tag X von Y"
