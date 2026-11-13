@@ -111,7 +111,12 @@ jobs:
             # The Linux job also produces UniDocs-linux-x86_64.AppImage and
             # install.sh (see "Package (Linux)" / "Build AppImage" below).
           - name: Windows
-            os: windows-latest
+            # Pinned, not windows-latest: the 2025 image ships Visual Studio 18
+            # (MSVC 14.51), which turned <experimental/coroutine> + /await into
+            # a hard error (STL1011) - serious_python 0.9.x still uses it, so
+            # the build dies in a C2338 static_assert. windows-2022 keeps
+            # VS 17, where the build succeeds.
+            os: windows-2022
             target: windows
             asset: UniDocs-windows-x86_64.zip
             # The Windows job also produces UniDocs-<version>-windows-x86_64-setup.exe
@@ -165,12 +170,10 @@ jobs:
       # ------------------------------------------------------------------
       # Platform prerequisites for the build machine
       # ------------------------------------------------------------------
-      # The minimal set `flet build linux --desktop-flavor light` needs. The
-      # gstreamer/libmpv/ffmpeg packages Flet's own docs list are only for
-      # flet-audio/flet-video, which this app does not use - and they drag in
-      # 220+ extra packages. That used to make this step take over an hour when
-      # the azure.archive.ubuntu.com mirror stalled on single downloads, so the
-      # list stays short (this step now runs in about a minute).
+      # `desktop_flavor = full` + flet-audio (the Pomodoro gong) need gstreamer,
+      # so the two gstreamer dev packages are required now; without them the
+      # build dies in `pkg_check_modules(gstreamer-1.0)`. libmpv/ffmpeg are
+      # still skipped - only flet-video uses those, and the app has no video.
       #
       # No apt cache action on purpose: awalsh128/cache-apt-pkgs-action restored
       # a cache created on the 26.04 image into a 24.04 job, reported success
@@ -182,14 +185,15 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             binutils clang cmake ninja-build pkg-config llvm lld \
-            libgtk-3-dev libsecret-1-dev libunwind-dev libasound2-dev
+            libgtk-3-dev libsecret-1-dev libunwind-dev libasound2-dev \
+            libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev
 
       # Cheap guard: fails here instead of deep inside the CMake configure if a
       # toolchain package did not land.
       - name: Verify Linux toolchain
         if: matrix.target == 'linux'
         run: |
-          pkg-config --modversion gtk+-3.0 libsecret-1
+          pkg-config --modversion gtk+-3.0 libsecret-1 gstreamer-1.0
           cmake --version | head -1
           clang --version | head -1
 

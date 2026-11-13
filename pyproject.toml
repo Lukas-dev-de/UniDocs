@@ -33,6 +33,10 @@ dependencies = [
     "google-api-python-client>=2.100.0",
     "google-auth>=2.23.0",
     "google-auth-oauthlib>=1.1.0",
+    # google-auth pulls cryptography; 50+ dropped the macOS universal2 wheel, so
+    # `flet build macos` (universal) falls back to a Rust source build that
+    # fails. Cap it to the last version that still ships universal2 wheels.
+    "cryptography<49",
 ]
 
 [project.optional-dependencies]
