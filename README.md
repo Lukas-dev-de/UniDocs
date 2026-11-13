@@ -210,7 +210,22 @@ Two environment variables configure it:
 - `UNIDOCS_DATA_DIR` pins the storage folder (otherwise the app setting is
   used). Point it at the mounted volume / disk where the documents live.
 
-#### Option A: Docker (recommended)
+#### Option A: One-liner (recommended)
+
+For a bare-metal server (a Proxmox LXC/VM, a VPS, a Raspberry Pi) with Debian
+or Ubuntu, install and start everything in one command:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Lukas-dev-de/UniDocs/main/installer/install-server.sh | bash
+```
+
+It installs the system packages, clones the repo to `/opt/unidocs`, creates the
+venv, writes a systemd unit and starts the service. At the end it prints the
+URL and the API token. Re-run it to update. Optional environment variables:
+`UNIDOCS_API_TOKEN` (pin the token), `UNIDOCS_DATA_DIR` (default
+`/var/lib/unidocs`), `UNIDOCS_PORT` (default `8550`).
+
+#### Option B: Docker
 
 Published releases push the image to GitHub Container Registry
 (`ghcr.io/lukas-dev-de/unidocs-server`), so no build is needed:
@@ -237,7 +252,7 @@ Alternatively, build from this checkout with `docker compose`:
 UNIDOCS_API_TOKEN="$TOKEN" docker compose up -d
 ```
 
-#### Option B: Bare metal (pip + systemd)
+#### Option C: Bare metal (manual)
 
 ```bash
 # 1. Get the code and a virtualenv.
